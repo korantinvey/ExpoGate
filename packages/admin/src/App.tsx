@@ -17,7 +17,14 @@ import { usePushNotifications } from './hooks/usePushNotifications'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
-  usePushNotifications(user?.id ?? null)
+  const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
+  const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('push_banner_dismissed') === '1')
+  const showBanner = supported && permission === 'default' && !bannerDismissed
+
+  function dismissBanner() {
+    localStorage.setItem('push_banner_dismissed', '1')
+    setBannerDismissed(true)
+  }
 
   useEffect(() => {
     if (user) {
@@ -44,30 +51,48 @@ function AppRoutes() {
     )
   }
 
+  const pushBanner = showBanner ? (
+    <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 300, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 'calc(100vw - 32px)', width: 420 }}>
+      <span style={{ fontSize: 20 }}>🔔</span>
+      <div style={{ flex: 1, fontSize: 13 }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>Activer les notifications</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Recevez les alertes de non-conformité en temps réel</div>
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={async () => { await requestPermission(); dismissBanner() }}>Activer</button>
+      <button onClick={dismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, padding: 2 }}>×</button>
+    </div>
+  ) : null
+
   if (user.is_admin) {
     return (
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="evenements" element={<EvenementsPage />} />
-          <Route path="evenements/:id" element={<FicheEvenementPage />} />
-          <Route path="utilisateurs" element={<UtilisateursPage />} />
-          <Route path="prestataires" element={<PrestatairesPage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
+      <>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="evenements" element={<EvenementsPage />} />
+            <Route path="evenements/:id" element={<FicheEvenementPage />} />
+            <Route path="utilisateurs" element={<UtilisateursPage />} />
+            <Route path="prestataires" element={<PrestatairesPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+        {pushBanner}
+      </>
     )
   }
 
   return (
-    <Routes>
-      <Route element={<LayoutOrganisateur />}>
-        <Route index element={<EvenementsOrganisateurPage />} />
-        <Route path="evenements/:id" element={<FicheEvenementOrganisateurPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route element={<LayoutOrganisateur />}>
+          <Route index element={<EvenementsOrganisateurPage />} />
+          <Route path="evenements/:id" element={<FicheEvenementOrganisateurPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+      {pushBanner}
+    </>
   )
 }
 
