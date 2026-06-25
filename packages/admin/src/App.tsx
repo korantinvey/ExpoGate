@@ -52,14 +52,13 @@ function AppRoutes() {
   }
 
   const pushBanner = showBanner ? (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, background: 'var(--accent)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 20 }}>🔔</span>
-      <span style={{ fontSize: 18 }}>🔔</span>
-      <div style={{ flex: 1, fontSize: 13, color: 'white' }}>
-        <strong>Activer les notifications</strong> — recevez les alertes en temps réel
-      </div>
-      <button className="btn btn-sm" onClick={async () => { await requestPermission(); dismissBanner() }} style={{ background: 'white', color: 'var(--accent-dark)', border: 'none', fontWeight: 600 }}>Activer</button>
-      <button onClick={dismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: 20, lineHeight: 1, padding: '0 4px' }}>×</button>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, background: 'var(--accent)', padding: '12px 16px' }}>
+      <button onClick={async () => { await requestPermission(); dismissBanner() }}
+        style={{ display: 'block', width: '100%', background: 'white', border: 'none', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', textAlign: 'left' }}>
+        <div style={{ fontWeight: 600, color: 'var(--accent-dark)', fontSize: 14 }}>🔔 Activer les notifications push</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>Touchez ici pour recevoir les alertes en temps réel</div>
+      </button>
+      <button onClick={dismissBanner} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: 22, lineHeight: 1, padding: 4 }}>×</button>
     </div>
   ) : null
 
