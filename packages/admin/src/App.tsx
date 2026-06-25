@@ -13,9 +13,11 @@ import { PrestatairesPage } from './pages/PrestatairesPage'
 import { EvenementsOrganisateurPage } from './pages/EvenementsOrganisateurPage'
 import { FicheEvenementOrganisateurPage } from './pages/FicheEvenementOrganisateurPage'
 import { sb } from './lib/supabase'
+import { usePushNotifications } from './hooks/usePushNotifications'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
+  usePushNotifications(user?.id ?? null)
 
   useEffect(() => {
     if (user) {
