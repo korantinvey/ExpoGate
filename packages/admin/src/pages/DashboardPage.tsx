@@ -62,8 +62,8 @@ export function DashboardPage() {
             emptyState={<div className="empty-state"><div className="empty-icon">◈</div><div>Aucun événement créé</div></div>}
             columns={[
               { key: 'nom', label: 'Nom', sortable: true, filterable: true, render: e => <span style={{ fontWeight: 600 }}>{e.nom}</span> },
-              { key: 'lieu', label: 'Lieu', sortable: true, filterable: true },
-              { key: 'dates', label: 'Dates', getValue: e => `${e.date_debut} ${e.date_fin}`, render: e => `${fmtDate(e.date_debut)} → ${fmtDate(e.date_fin)}` },
+              { key: 'lieu', label: 'Lieu', sortable: true, filterable: true, hideOnMobile: true },
+              { key: 'dates', label: 'Dates', hideOnMobile: true, getValue: e => `${e.date_debut} ${e.date_fin}`, render: e => `${fmtDate(e.date_debut)} → ${fmtDate(e.date_fin)}` },
               { key: 'statut', label: 'Statut', sortable: true, filterable: true, options: [{ value: 'parametrage', label: 'Paramétrage' }, { value: 'actif', label: 'Actif' }, { value: 'termine', label: 'Terminé' }], render: e => <Badge statut={e.statut} /> },
             ]}
           />

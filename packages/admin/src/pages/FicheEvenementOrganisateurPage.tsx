@@ -242,8 +242,8 @@ function TabStands({ ev }: { ev: Evenement }) {
               { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: s => <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span> },
               { key: 'hall', label: 'Hall / Pavillon', sortable: true, filterable: true },
               { key: 'numero', label: 'N° de stand', sortable: true, filterable: true },
-              { key: 'surface', label: 'Surface (m²)', sortable: true },
-              { key: 'angles', label: 'Angles', sortable: true },
+              { key: 'surface', label: 'Surface (m²)', sortable: true, hideOnMobile: true },
+              { key: 'angles', label: 'Angles', sortable: true, hideOnMobile: true },
               { key: 'prestations', label: '', render: s => (
                 <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setViewingPrestations(s) }}>
                   Prestations
@@ -663,17 +663,17 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
             columns={[
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
               { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => <span style={{ fontWeight: 600 }}>{p.libelle}</span> },
-              { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true },
+              { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true, hideOnMobile: true },
               { key: 'quantite_attendue', label: 'Qté', sortable: true },
-              { key: 'emplacement_prevu', label: 'Emplacement', filterable: true },
-              { key: 'prestataire', label: 'Prestataire', sortable: true, filterable: true, getValue: p => p.prestataires?.raison_sociale ?? '', render: p => p.prestataires?.raison_sociale ?? <span className="text-muted">—</span> },
+              { key: 'emplacement_prevu', label: 'Emplacement', filterable: true, hideOnMobile: true },
+              { key: 'prestataire', label: 'Prestataire', sortable: true, filterable: true, hideOnMobile: true, getValue: p => p.prestataires?.raison_sociale ?? '', render: p => p.prestataires?.raison_sociale ?? <span className="text-muted">—</span> },
               { key: 'statut_conformite', label: 'Conformité', sortable: true, filterable: true,
                 options: [{ value: '', label: 'Non contrôlée' }, ...Object.entries(STATUT_LABELS).map(([v, l]) => ({ value: v, label: l }))],
                 getValue: p => p.statut_conformite ?? '',
                 render: p => p.statut_conformite
                   ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
                   : <span className="text-muted">—</span> },
-              { key: 'ajout_sur_site', label: 'Sur site', sortable: true, filterable: true,
+              { key: 'ajout_sur_site', label: 'Sur site', sortable: true, filterable: true, hideOnMobile: true,
                 options: [{ value: 'Oui', label: 'À facturer' }, { value: 'Non', label: 'Non' }],
                 getValue: p => p.ajout_sur_site ? 'Oui' : 'Non',
                 render: p => p.ajout_sur_site ? <span style={{ color: 'var(--amber)', fontWeight: 600 }}>À facturer</span> : <span className="text-muted">—</span> },

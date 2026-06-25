@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 
+const isMobile = () => window.innerWidth <= 768
+
 const deburr = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 export interface Column<T> {
@@ -8,6 +10,7 @@ export interface Column<T> {
   label: string
   sortable?: boolean
   filterable?: boolean
+  hideOnMobile?: boolean
   options?: { value: string; label: string }[]
   render?: (row: T) => React.ReactNode
   getValue?: (row: T) => string
@@ -82,6 +85,8 @@ const popoverStyle: React.CSSProperties = {
 }
 
 export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady }: Props<T>) {
+  const mobile = isMobile()
+  const visibleColumns = useMemo(() => mobile ? columns.filter(c => !c.hideOnMobile) : columns, [columns, mobile])
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
   const [textFilters, setTextFilters] = useState<Record<string, string>>({})
@@ -138,7 +143,7 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
     <table>
       <thead>
         <tr>
-          {columns.map(col => {
+          {visibleColumns.map(col => {
             const isPicklist = !!col.options
             const isFiltered = isPicklist ? (pickFilters[col.key]?.length ?? 0) > 0 : !!(textFilters[col.key]?.trim())
             return (
@@ -169,10 +174,10 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
       </thead>
       <tbody>
         {processed.length === 0 ? (
-          <tr><td colSpan={columns.length}>{emptyState ?? <div className="empty-state">Aucun résultat.</div>}</td></tr>
+          <tr><td colSpan={visibleColumns.length}>{emptyState ?? <div className="empty-state">Aucun résultat.</div>}</td></tr>
         ) : processed.map((row, i) => (
           <tr key={(row as Record<string, unknown>).id as string ?? i} onClick={() => onRowClick?.(row)} style={{ ...(onRowClick ? { cursor: 'pointer' } : {}), ...rowStyle?.(row) }}>
-            {columns.map(col => <td key={col.key}>{col.render ? col.render(row) : getVal(row, col) || '—'}</td>)}
+            {visibleColumns.map(col => <td key={col.key}>{col.render ? col.render(row) : getVal(row, col) || '—'}</td>)}
           </tr>
         ))}
       </tbody>
