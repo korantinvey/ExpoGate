@@ -87,9 +87,49 @@ function UserForm({ user, onSaved }: { user: User | null; onSaved: () => void })
   )
 }
 
+function PushModal({ user, onClose, notify }: { user: User; onClose: () => void; notify: (msg: string, type?: 'success' | 'error') => void }) {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  async function send() {
+    if (!title.trim() || !body.trim()) return
+    setSending(true)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ user_ids: [user.id], title: title.trim(), body: body.trim() }),
+      })
+      const data = await res.json()
+      if (data.sent > 0) notify('Notification envoyée', 'success')
+      else notify('Aucun appareil enregistré pour cet utilisateur', 'error')
+      onClose()
+    } catch {
+      notify('Erreur lors de l\'envoi', 'error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Modal title={`Notifier ${user.prenom} ${user.nom}`} confirmLabel={sending ? 'Envoi…' : 'Envoyer'} onClose={onClose} onConfirm={async () => { await send(); return true }}>
+      <div className="form-group">
+        <label>Titre</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Nouveau document disponible" />
+      </div>
+      <div className="form-group">
+        <label>Message</label>
+        <textarea value={body} onChange={e => setBody(e.target.value)} rows={3} placeholder="Contenu de la notification…" />
+      </div>
+    </Modal>
+  )
+}
+
 export function UtilisateursPage() {
   const [users, setUsers] = useState<User[]>([])
   const [modal, setModal] = useState<User | null | 'new'>(null)
+  const [pushModal, setPushModal] = useState<User | null>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const { notify, toastEl } = useToast()
 
@@ -138,9 +178,10 @@ export function UtilisateursPage() {
               { key: 'is_admin', label: 'Profil', sortable: true, filterable: true, options: [{ value: 'Admin', label: 'Admin' }, { value: 'Utilisateur', label: 'Utilisateur' }], getValue: u => u.is_admin ? 'Admin' : 'Utilisateur', render: u => u.is_admin ? <Badge statut="admin" /> : <Badge statut="organisateur" /> },
               { key: 'last_sign_in_at', label: 'Dernière connexion', sortable: true, hideOnMobile: true, getValue: u => u.last_sign_in_at ?? '', render: u => u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : <span className="text-muted">Jamais</span> },
               { key: 'actions', label: '', render: u => (
-                <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(u.email) }}>
-                  Envoyer l'invitation
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(u.email) }}>Invitation</button>
+                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setPushModal(u) }}>🔔 Notifier</button>
+                </div>
               )},
             ]}
           />
@@ -150,6 +191,7 @@ export function UtilisateursPage() {
       {modal !== null && (
         <UserForm user={modal === 'new' ? null : modal} onSaved={() => { setModal(null); load() }} />
       )}
+      {pushModal && <PushModal user={pushModal} onClose={() => setPushModal(null)} notify={notify} />}
       {toastEl}
     </>
   )
