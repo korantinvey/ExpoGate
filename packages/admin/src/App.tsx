@@ -52,14 +52,14 @@ function AppRoutes() {
   }
 
   const pushBanner = showBanner ? (
-    <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 300, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 'calc(100vw - 32px)', width: 420 }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, background: 'var(--accent)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
       <span style={{ fontSize: 20 }}>🔔</span>
-      <div style={{ flex: 1, fontSize: 13 }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>Activer les notifications</div>
-        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Recevez les alertes de non-conformité en temps réel</div>
+      <span style={{ fontSize: 18 }}>🔔</span>
+      <div style={{ flex: 1, fontSize: 13, color: 'white' }}>
+        <strong>Activer les notifications</strong> — recevez les alertes en temps réel
       </div>
-      <button className="btn btn-primary btn-sm" onClick={async () => { await requestPermission(); dismissBanner() }}>Activer</button>
-      <button onClick={dismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, padding: 2 }}>×</button>
+      <button className="btn btn-sm" onClick={async () => { await requestPermission(); dismissBanner() }} style={{ background: 'white', color: 'var(--accent-dark)', border: 'none', fontWeight: 600 }}>Activer</button>
+      <button onClick={dismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: 20, lineHeight: 1, padding: '0 4px' }}>×</button>
     </div>
   ) : null
 
