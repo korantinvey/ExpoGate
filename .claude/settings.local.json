@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"C:\\\\projets\\\\conformite-evenements\"; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"C:\\\\projets\\\\conformite-evenements\"; npm run admin' -WindowStyle Normal)",
+      "PowerShell(Get-WmiObject Win32_Process | Where-Object { $_.Name -eq 'node.exe' } | Select-Object ProcessId, CommandLine | Format-List)",
+      "PowerShell(Stop-Process -Id 16344 -Force)",
+      "Bash(npm install *)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\projets\\\\conformite-evenements\\\\packages\\\\admin\\\\public\")"
+    ],
+    "defaultMode": "bypassPermissions"
+  }
+}

@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Conformité Événements</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f7f7f5;
+      --surface: #ffffff;
+      --border: #e4e4e0;
+      --text: #1a1a18;
+      --text-muted: #6b6b67;
+      --accent: #1D9E75;
+      --accent-light: #E1F5EE;
+      --accent-dark: #0F6E56;
+      --danger: #E24B4A;
+      --danger-light: #FCEBEB;
+      --amber: #BA7517;
+      --amber-light: #FAEEDA;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+
+    /* Layout */
+    #app { display: flex; min-height: 100vh; }
+    #sidebar { width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 10; }
+    #main { margin-left: 240px; flex: 1; padding: 32px; max-width: 1100px; }
+
+    /* Sidebar */
+    .sidebar-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-logo { font-size: 13px; font-weight: 600; color: var(--accent-dark); letter-spacing: 0.05em; text-transform: uppercase; }
+    .sidebar-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .sidebar-nav { padding: 12px 8px; flex: 1; }
+    .nav-section { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px 4px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); cursor: pointer; font-size: 14px; color: var(--text-muted); transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 500; }
+    .nav-icon { font-size: 16px; width: 18px; text-align: center; }
+    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border); }
+    .user-badge { display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--accent-dark); }
+    .user-info { flex: 1; min-width: 0; }
+    .user-email { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .logout-btn { font-size: 12px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 2px 0; }
+    .logout-btn:hover { color: var(--danger); }
+
+    /* Auth */
+    #auth-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px; width: 380px; box-shadow: var(--shadow); }
+    .auth-title { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+    .auth-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+
+    /* Page header */
+    .page-header { margin-bottom: 24px; }
+    .page-title { font-size: 22px; font-weight: 600; }
+    .page-subtitle { color: var(--text-muted); font-size: 14px; margin-top: 2px; }
+
+    /* Cards & tables */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 15px; font-weight: 500; }
+    .card-body { padding: 0; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); background: var(--bg); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg); }
+
+    /* Forms */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+    input, select, textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29,158,117,0.1); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; font-family: inherit; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-danger { background: var(--danger-light); color: var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: white; }
+    .btn-sm { padding: 5px 10px; font-size: 13px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-parametrage { background: var(--amber-light); color: var(--amber); }
+    .badge-actif { background: var(--accent-light); color: var(--accent-dark); }
+    .badge-termine { background: var(--border); color: var(--text-muted); }
+    .badge-admin { background: #EEEDFE; color: #3C3489; }
+    .badge-organisateur { background: var(--accent-light); color: var(--accent-dark); }
+    .badge-controleur { background: var(--amber-light); color: var(--amber); }
+    .badge-prestataire { background: #FAECE7; color: #712B13; }
+
+    /* Stats row */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow); }
+    .stat-value { font-size: 28px; font-weight: 600; line-height: 1; }
+    .stat-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--surface); border-radius: var(--radius-lg); width: 100%; max-width: 520px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-size: 17px; font-weight: 600; }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+
+    /* Alerts */
+    .alert { padding: 12px 16px; border-radius: var(--radius); font-size: 14px; margin-bottom: 16px; }
+    .alert-error { background: var(--danger-light); color: var(--danger); border: 1px solid #F09595; }
+    .alert-success { background: var(--accent-light); color: var(--accent-dark); border: 1px solid #5DCAA5; }
+
+    /* Import zone */
+    .import-zone { border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 32px; text-align: center; cursor: pointer; transition: all 0.15s; }
+    .import-zone:hover { border-color: var(--accent); background: var(--accent-light); }
+    .import-zone.dragover { border-color: var(--accent); background: var(--accent-light); }
+    .import-icon { font-size: 32px; margin-bottom: 8px; }
+    .import-text { font-size: 14px; color: var(--text-muted); }
+    .import-text strong { color: var(--accent-dark); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+    .tab { padding: 10px 16px; font-size: 14px; cursor: pointer; border: none; background: none; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-family: inherit; }
+    .tab.active { color: var(--accent-dark); border-bottom-color: var(--accent); font-weight: 500; }
+    .tab:hover { color: var(--text); }
+
+    /* Utilities */
+    .flex { display: flex; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .mt-4 { margin-top: 16px; }
+    .mt-6 { margin-top: 24px; }
+    .text-muted { color: var(--text-muted); font-size: 13px; }
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  </style>
+</head>
+<body>
+
+<div id="auth-screen" style="display:none;">
+  <div class="auth-card">
+    <div class="auth-title">Administration</div>
+    <div class="auth-subtitle">Connectez-vous pour accéder au back-office</div>
+    <div id="auth-error"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="admin@exemple.com">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="login()">
+      <span id="login-btn-text">Se connecter</span>
+    </button>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">Conformité</div>
+      <div class="sidebar-subtitle">Back-office Admin</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Vue d'ensemble</div>
+      <button class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+        <span class="nav-icon">◻</span> Tableau de bord
+      </button>
+      <div class="nav-section" style="margin-top:12px">Gestion</div>
+      <button class="nav-item" onclick="navigate('evenements')" id="nav-evenements">
+        <span class="nav-icon">◈</span> Événements
+      </button>
+      <button class="nav-item" onclick="navigate('utilisateurs')" id="nav-utilisateurs">
+        <span class="nav-icon">◉</span> Utilisateurs
+      </button>
+      <button class="nav-item" onclick="navigate('prestataires')" id="nav-prestataires">
+        <span class="nav-icon">◎</span> Prestataires
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-email" id="user-email-display"></div>
+          <button class="logout-btn" onclick="logout()">Déconnexion</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="page-dashboard"></div>
+    <div id="page-evenements" style="display:none"></div>
+    <div id="page-utilisateurs" style="display:none"></div>
+    <div id="page-prestataires" style="display:none"></div>
+    <div id="page-fiche-evenement" style="display:none"></div>
+  </main>
+</div>
+
+<div id="modal-container"></div>
+
+<script>
+const SUPABASE_URL = 'https://fhelmytyygtgbhnnpuml.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZWxteXR5eWd0Z2Jobm5wdW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MTQwNzYsImV4cCI6MjA5NzM5MDA3Nn0.DOcL6XLjNBHLtgvFYpwhpcKP8HH7JWR0lLLAY1yh7n0';
+const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZWxteXR5eWd0Z2Jobm5wdW1sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTgxNDA3NiwiZXhwIjoyMDk3MzkwMDc2fQ.NvNIEegBbFS9sbdDDE1KFTJdZwB8udk_e-oUndMIWWo';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sbAdmin = supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE, {
+  auth: { autoRefreshToken: false, persistSession: false }
+});
+
+let currentUser = null;
+let currentPage = 'dashboard';
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await initApp(session.user);
+  } else {
+    showAuth();
+  }
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN') await initApp(session.user);
+    if (event === 'SIGNED_OUT') showAuth();
+  });
+});
+
+async function initApp(user) {
+  const { data: profile } = await sb.from('users').select('*').eq('id', user.id).single();
+  if (!profile?.is_admin) {
+    await sb.auth.signOut();
+    showError('auth-error', 'Accès réservé aux administrateurs.');
+    showAuth();
+    return;
+  }
+  currentUser = { ...user, ...profile };
+  document.getElementById('user-email-display').textContent = user.email;
+  document.getElementById('user-avatar').textContent = (profile.prenom?.[0] || user.email[0]).toUpperCase();
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  navigate('dashboard');
+}
+
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd = document.getElementById('login-password').value;
+  const btn = document.querySelector('#auth-screen .btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  if (error) {
+    showError('auth-error', 'Email ou mot de passe incorrect.');
+    btn.disabled = false;
+    btn.innerHTML = 'Se connecter';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('auth-screen').style.display !== 'none') login();
+});
+
+async function logout() {
+  await sb.auth.signOut();
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function navigate(page, ...args) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-' + page)?.classList.add('active');
+  document.querySelectorAll('#main > div').forEach(el => el.style.display = 'none');
+  document.getElementById('page-' + page).style.display = 'block';
+  currentPage = page;
+  const pages = { dashboard: renderDashboard, evenements: renderEvenements, utilisateurs: renderUtilisateurs, prestataires: renderPrestataires, 'fiche-evenement': renderFicheEvenement };
+  pages[page]?.(...args);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const el = document.getElementById('page-dashboard');
+  el.innerHTML = `<div class="page-header"><div class="page-title">Tableau de bord</div><div class="page-subtitle">Vue d'ensemble de la plateforme</div></div><div class="stats-grid" id="stats-grid"><div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Événements actifs</div></div><div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Utilisateurs</div></div><div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Prestataires</div></div><div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Stands total</div></div></div><div class="card"><div class="card-header"><div class="card-title">Événements récents</div><button class="btn btn-primary btn-sm" onclick="navigate('evenements')">Voir tout</button></div><div class="card-body"><div id="dash-events-list"></div></div></div>`;
+
+  const [evRes, usRes, prRes, stRes] = await Promise.all([
+    sb.from('evenements').select('*', { count: 'exact' }).eq('statut', 'actif'),
+    sb.from('users').select('*', { count: 'exact' }),
+    sb.from('prestataires').select('*', { count: 'exact' }),
+    sb.from('stands').select('*', { count: 'exact' }),
+  ]);
+
+  const stats = document.querySelectorAll('.stat-card .stat-value');
+  stats[0].textContent = evRes.count ?? 0;
+  stats[1].textContent = usRes.count ?? 0;
+  stats[2].textContent = prRes.count ?? 0;
+  stats[3].textContent = stRes.count ?? 0;
+
+  const { data: events } = await sb.from('evenements').select('*').order('created_at', { ascending: false }).limit(5);
+  const list = document.getElementById('dash-events-list');
+  if (!events?.length) { list.innerHTML = `<div class="empty-state"><div class="empty-icon">◈</div><div>Aucun événement créé</div></div>`; return; }
+  list.innerHTML = `<table><thead><tr><th>Nom</th><th>Lieu</th><th>Dates</th><th>Statut</th></tr></thead><tbody>${events.map(e => `<tr><td><strong>${e.nom}</strong></td><td>${e.lieu || '—'}</td><td>${fmt(e.date_debut)} → ${fmt(e.date_fin)}</td><td>${badge(e.statut)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+// ── ÉVÉNEMENTS ────────────────────────────────────────────────────────────────
+async function renderEvenements() {
+  const el = document.getElementById('page-evenements');
+  el.innerHTML = `<div class="page-header flex items-center justify-between"><div><div class="page-title">Événements</div><div class="page-subtitle">Créer et gérer les salons</div></div><button class="btn btn-primary" onclick="openModalEvenement()">+ Nouvel événement</button></div><div class="card"><div class="card-header"><div class="card-title" id="ev-count">Chargement...</div><div class="flex gap-2"><select id="ev-filter" onchange="renderEvenements()" style="width:auto;padding:6px 10px;font-size:13px"><option value="">Tous les statuts</option><option value="parametrage">Paramétrage</option><option value="actif">Actif</option><option value="termine">Terminé</option></select></div></div><div class="card-body"><div id="ev-list"></div></div></div>`;
+  await loadEvenements();
+}
+
+async function loadEvenements() {
+  const filter = document.getElementById('ev-filter')?.value;
+  let q = sb.from('evenements').select('*').order('date_debut', { ascending: false });
+  if (filter) q = q.eq('statut', filter);
+  const { data, error } = await q;
+  const list = document.getElementById('ev-list');
+  const count = document.getElementById('ev-count');
+  if (error || !data?.length) { list.innerHTML = `<div class="empty-state"><div class="empty-icon">◈</div><div>Aucun événement trouvé</div><div class="mt-4"><button class="btn btn-primary" onclick="openModalEvenement()">Créer un événement</button></div></div>`; count.textContent = '0 événement'; return; }
+  count.textContent = `${data.length} événement${data.length > 1 ? 's' : ''}`;
+  list.innerHTML = `<table><thead><tr><th>Nom</th><th>Lieu</th><th>Dates</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${data.map(e => `<tr><td><a href="#" onclick="navigate('fiche-evenement','${e.id}');return false;" style="color:var(--accent-dark);font-weight:600;text-decoration:none">${e.nom}</a></td><td>${e.lieu || '—'}</td><td>${fmt(e.date_debut)} → ${fmt(e.date_fin)}</td><td>${badge(e.statut)}</td><td><div class="flex gap-2"><button class="btn btn-secondary btn-sm" onclick="navigate('fiche-evenement','${e.id}')">Ouvrir</button><button class="btn btn-secondary btn-sm" onclick="openModalEvenement(${JSON.stringify(e).replace(/"/g,'&quot;')})">Modifier</button></div></td></tr>`).join('')}</tbody></table>`;
+}
+
+function openModalEvenement(ev = null) {
+  const isEdit = !!ev;
+  showModal(`${isEdit ? 'Modifier' : 'Nouvel'} événement`, `
+    <div id="ev-modal-error"></div>
+    <div class="grid-2">
+      <div class="form-group" style="grid-column:1/-1"><label>Nom de l'événement</label><input id="ev-nom" value="${ev?.nom || ''}" placeholder="Ex: Salon du Meuble Paris 2025"></div>
+      <div class="form-group"><label>Date de début</label><input type="date" id="ev-debut" value="${ev?.date_debut || ''}"></div>
+      <div class="form-group"><label>Date de fin</label><input type="date" id="ev-fin" value="${ev?.date_fin || ''}"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Lieu</label><input id="ev-lieu" value="${ev?.lieu || ''}" placeholder="Ex: Paris Expo Porte de Versailles"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Statut</label><select id="ev-statut"><option value="parametrage" ${ev?.statut === 'parametrage' ? 'selected' : ''}>Paramétrage</option><option value="actif" ${ev?.statut === 'actif' ? 'selected' : ''}>Actif</option><option value="termine" ${ev?.statut === 'termine' ? 'selected' : ''}>Terminé</option></select></div>
+    </div>`,
+    async () => {
+      const payload = { nom: document.getElementById('ev-nom').value.trim(), date_debut: document.getElementById('ev-debut').value, date_fin: document.getElementById('ev-fin').value, lieu: document.getElementById('ev-lieu').value.trim(), statut: document.getElementById('ev-statut').value };
+      if (!payload.nom || !payload.date_debut || !payload.date_fin) { showError('ev-modal-error', 'Nom et dates sont obligatoires.'); return false; }
+      const { error } = isEdit ? await sb.from('evenements').update(payload).eq('id', ev.id) : await sb.from('evenements').insert(payload);
+      if (error) { showError('ev-modal-error', error.message); return false; }
+      if (document.getElementById('ev-list')) await loadEvenements();
+      if (document.getElementById('page-fiche-evenement').style.display !== 'none') await renderFicheEvenement(ev?.id || ficheState.evenementId);
+      return true;
+    }, isEdit ? 'Enregistrer' : 'Créer'
+  );
+}
+
+// ── IMPORT STANDS (XLSX ou CSV) ───────────────────────────────────────────────
+function openModalImport(evenementId, nomEvenement) {
+  showModal(`Importer les stands — ${nomEvenement}`, `
+    <div id="import-error"></div>
+    <p class="text-muted" style="margin-bottom:12px">Colonnes attendues : <strong>numero</strong>, nom_exposant, hall, emplacement. La première ligne (en-tête) est ignorée automatiquement.</p>
+    <button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="downloadTemplate('stands')">↓ Télécharger le modèle Excel</button>
+    <div class="import-zone" id="drop-zone" onclick="document.getElementById('import-file').click()">
+      <div class="import-icon">↑</div>
+      <div class="import-text">Glissez votre fichier Excel ou CSV ici, ou <strong>cliquez pour choisir</strong></div>
+      <div id="file-name" style="margin-top:8px;font-size:13px;color:var(--accent-dark)"></div>
+    </div>
+    <input type="file" id="import-file" accept=".xlsx,.xls,.csv" style="display:none">
+    <div id="import-preview" style="margin-top:16px"></div>`,
+    async () => {
+      const rows = window._importedRows;
+      if (!rows?.length) { showError('import-error', 'Veuillez sélectionner un fichier.'); return false; }
+      const payload = rows.map(r => ({
+        evenement_id: evenementId,
+        numero: String(r.numero ?? r.Numero ?? r.NUMERO ?? '').trim(),
+        nom_exposant: r.nom_exposant ?? r.nomExposant ?? r['Nom exposant'] ?? null,
+        hall: r.hall ?? r.Hall ?? null,
+        emplacement: r.emplacement ?? r.Emplacement ?? null,
+      })).filter(r => r.numero);
+      if (!payload.length) { showError('import-error', 'Aucune ligne valide trouvée (colonne "numero" requise).'); return false; }
+      const { error } = await sb.from('stands').upsert(payload, { onConflict: 'evenement_id,numero' });
+      if (error) { showError('import-error', error.message); return false; }
+      return true;
+    }, `Importer`
+  );
+  bindImportFile('import-file', 'drop-zone', 'file-name', 'import-preview',
+    ['numero', 'nom_exposant', 'hall', 'emplacement']);
+}
+
+// ── ACCÈS ÉVÉNEMENT ───────────────────────────────────────────────────────────
+async function openModalAcces(evenementId, nomEvenement) {
+  const { data: users } = await sb.from('users').select('*').order('nom');
+  const { data: prestataires } = await sb.from('prestataires').select('*').order('raison_sociale');
+  const { data: accesExistants } = await sb.from('user_evenements').select('*, users(nom, prenom, email), prestataires(raison_sociale)').eq('evenement_id', evenementId);
+  const { data: contacts } = await sb.from('prestataire_contacts').select('*, users(id, nom, prenom, email)');
+
+  window._accesContext = { users: users || [], contacts: contacts || [] };
+
+  const usersOptions = (users || []).map(u => `<option value="${u.id}">${u.prenom} ${u.nom} (${u.email})</option>`).join('');
+  const prestOptions = (prestataires || []).map(p => `<option value="${p.id}">${p.raison_sociale}</option>`).join('');
+  const accesHtml = (accesExistants || []).map(a => `<tr><td>${a.users?.prenom} ${a.users?.nom}</td><td>${badge(a.role_local)}</td><td>${a.prestataires?.raison_sociale || '—'}</td><td><button class="btn btn-danger btn-sm" onclick="revoquerAcces('${a.id}','${evenementId}','${nomEvenement}')">Révoquer</button></td></tr>`).join('');
+
+  showModal(`Accès — ${nomEvenement}`, `
+    <div id="acces-error"></div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">Accès actuels</div>
+      ${accesExistants?.length ? `<table><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Prestataire</th><th></th></tr></thead><tbody>${accesHtml}</tbody></table>` : '<div class="text-muted">Aucun accès configuré</div>'}
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Ajouter un accès</div>
+      <div class="form-group"><label>Rôle</label><select id="acces-role" onchange="togglePrestaField()"><option value="organisateur">Organisateur</option><option value="controleur">Contrôleur</option><option value="prestataire">Prestataire</option></select></div>
+      <div class="form-group" id="presta-field" style="display:none"><label>Société prestataire</label><select id="acces-presta" onchange="updateUserOptionsForPresta()">${prestOptions}</select></div>
+      <div class="form-group"><label>Utilisateur</label><select id="acces-user">${usersOptions}</select><div class="text-muted" id="acces-user-hint" style="margin-top:4px"></div></div>
+    </div>`,
+    async () => {
+      const userId = document.getElementById('acces-user').value;
+      const role = document.getElementById('acces-role').value;
+      const prestaId = role === 'prestataire' ? document.getElementById('acces-presta').value : null;
+      const { error } = await sb.from('user_evenements').upsert({ user_id: userId, evenement_id: evenementId, role_local: role, prestataire_id: prestaId }, { onConflict: 'user_id,evenement_id' });
+      if (error) { showError('acces-error', error.message); return false; }
+      openModalAcces(evenementId, nomEvenement);
+      if (document.getElementById('acces-tab-list')) loadAccesTab(evenementId);
+      return false;
+    }, 'Ajouter'
+  );
+}
+
+function updateUserOptionsForPresta() {
+  const role = document.getElementById('acces-role')?.value;
+  const select = document.getElementById('acces-user');
+  const hint = document.getElementById('acces-user-hint');
+  if (role !== 'prestataire') { select.innerHTML = window._accesContext.users.map(u => `<option value="${u.id}">${u.prenom} ${u.nom} (${u.email})</option>`).join(''); hint.textContent = ''; return; }
+  const prestaId = document.getElementById('acces-presta').value;
+  const eligibles = window._accesContext.contacts.filter(c => c.prestataire_id === prestaId).map(c => c.users);
+  if (!eligibles.length) {
+    select.innerHTML = '';
+    hint.innerHTML = `Aucun intervenant dans l'annuaire de cette société. <a href="#" onclick="closeModal();return false;" style="color:var(--accent-dark)">Ajoutez-en un depuis la fiche prestataire.</a>`;
+    return;
+  }
+  select.innerHTML = eligibles.map(u => `<option value="${u.id}">${u.prenom} ${u.nom} (${u.email})</option>`).join('');
+  hint.textContent = '';
+}
+
+function togglePrestaField() {
+  const role = document.getElementById('acces-role')?.value;
+  document.getElementById('presta-field').style.display = role === 'prestataire' ? 'block' : 'none';
+  updateUserOptionsForPresta();
+}
+
+async function revoquerAcces(id, evenementId, nomEvenement) {
+  if (!confirm('Révoquer cet accès ?')) return;
+  await sb.from('user_evenements').delete().eq('id', id);
+  openModalAcces(evenementId, nomEvenement);
+  if (document.getElementById('acces-tab-list')) loadAccesTab(evenementId);
+}
+
+// ── FICHE ÉVÉNEMENT (vue à onglets) ──────────────────────────────────────────
+let ficheState = { evenementId: null, tab: 'details' };
+
+async function renderFicheEvenement(evenementId) {
+  if (evenementId) ficheState = { evenementId, tab: 'details' };
+  const { data: ev, error } = await sb.from('evenements').select('*').eq('id', ficheState.evenementId).single();
+  const el = document.getElementById('page-fiche-evenement');
+  if (error || !ev) { el.innerHTML = `<div class="empty-state">Événement introuvable.</div>`; return; }
+
+  el.innerHTML = `
+    <div class="page-header">
+      <a href="#" onclick="navigate('evenements');return false;" style="font-size:13px;color:var(--text-muted);text-decoration:none">← Tous les événements</a>
+      <div class="flex items-center justify-between mt-4">
+        <div>
+          <div class="page-title">${ev.nom}</div>
+          <div class="page-subtitle">${ev.lieu || '—'} · ${fmt(ev.date_debut)} → ${fmt(ev.date_fin)} · ${badge(ev.statut)}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openModalEvenement(${JSON.stringify(ev).replace(/"/g,'&quot;')})">Modifier les informations</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab ${ficheState.tab==='details'?'active':''}" onclick="switchFicheTab('details')">Détails</button>
+      <button class="tab ${ficheState.tab==='stands'?'active':''}" onclick="switchFicheTab('stands')">Stands</button>
+      <button class="tab ${ficheState.tab==='prestations'?'active':''}" onclick="switchFicheTab('prestations')">Prestations</button>
+      <button class="tab ${ficheState.tab==='acces'?'active':''}" onclick="switchFicheTab('acces')">Accès</button>
+    </div>
+    <div id="fiche-tab-content"></div>`;
+
+  renderFicheTabContent(ev);
+}
+
+function switchFicheTab(tab) {
+  ficheState.tab = tab;
+  document.querySelectorAll('.tabs .tab').forEach((el, i) => el.classList.toggle('active', ['details','stands','prestations','acces'][i] === tab));
+  renderFicheTabContentFromState();
+}
+
+async function renderFicheTabContentFromState() {
+  const { data: ev } = await sb.from('evenements').select('*').eq('id', ficheState.evenementId).single();
+  renderFicheTabContent(ev);
+}
+
+async function renderFicheTabContent(ev) {
+  const el = document.getElementById('fiche-tab-content');
+  if (ficheState.tab === 'details') {
+    el.innerHTML = `<div class="card"><div class="card-body" style="padding:24px"><div class="grid-2">
+      <div><div class="text-muted">Lieu</div><div style="margin-top:2px">${ev.lieu || '—'}</div></div>
+      <div><div class="text-muted">Statut</div><div style="margin-top:2px">${badge(ev.statut)}</div></div>
+      <div><div class="text-muted">Date de début</div><div style="margin-top:2px">${fmt(ev.date_debut)}</div></div>
+      <div><div class="text-muted">Date de fin</div><div style="margin-top:2px">${fmt(ev.date_fin)}</div></div>
+    </div></div></div>`;
+    return;
+  }
+  if (ficheState.tab === 'stands') return renderTabStands(ev);
+  if (ficheState.tab === 'prestations') return renderTabPrestations(ev);
+  if (ficheState.tab === 'acces') return renderTabAcces(ev);
+}
+
+// ── Onglet Stands ─────────────────────────────────────────────────────────────
+async function renderTabStands(ev) {
+  const el = document.getElementById('fiche-tab-content');
+  el.innerHTML = `<div class="card">
+    <div class="card-header">
+      <div class="card-title" id="stands-count">Chargement...</div>
+      <div class="flex gap-2">
+        <input id="stands-search" placeholder="Rechercher un stand..." style="width:200px;padding:6px 10px;font-size:13px" oninput="filterStandsList()">
+        <button class="btn btn-secondary btn-sm" onclick="openModalImport('${ev.id}','${ev.nom.replace(/'/g,"\\'")}')">Importer</button>
+        <button class="btn btn-primary btn-sm" onclick="openModalStand(null,'${ev.id}')">+ Stand</button>
+      </div>
+    </div>
+    <div class="card-body"><div id="stands-list"></div></div>
+  </div>`;
+  await loadStandsTab(ev.id);
+}
+
+async function loadStandsTab(evenementId) {
+  const { data, error } = await sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero');
+  window._standsCache = data || [];
+  const count = document.getElementById('stands-count');
+  if (error || !data?.length) {
+    document.getElementById('stands-list').innerHTML = `<div class="empty-state"><div class="empty-icon">▦</div><div>Aucun stand pour cet événement</div><div class="mt-4"><button class="btn btn-primary" onclick="openModalStand(null,'${evenementId}')">Ajouter un stand</button></div></div>`;
+    count.textContent = '0 stand';
+    return;
+  }
+  count.textContent = `${data.length} stand${data.length > 1 ? 's' : ''}`;
+  renderStandsTable(data, evenementId);
+}
+
+function renderStandsTable(data, evenementId) {
+  document.getElementById('stands-list').innerHTML = `<table><thead><tr><th>N°</th><th>Exposant</th><th>Hall</th><th>Emplacement</th><th>Actions</th></tr></thead><tbody>${data.map(s => `<tr><td><strong>${s.numero}</strong></td><td>${s.nom_exposant || '—'}</td><td>${s.hall || '—'}</td><td>${s.emplacement || '—'}</td><td><button class="btn btn-secondary btn-sm" onclick="openModalStand(${JSON.stringify(s).replace(/"/g,'&quot;')},'${evenementId}')">Modifier</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+function filterStandsList() {
+  const q = document.getElementById('stands-search').value.trim().toLowerCase();
+  const data = (window._standsCache || []).filter(s => !q || s.numero.toLowerCase().includes(q) || (s.nom_exposant || '').toLowerCase().includes(q) || (s.hall || '').toLowerCase().includes(q));
+  renderStandsTable(data, ficheState.evenementId);
+}
+
+function openModalStand(stand, evenementId) {
+  const isEdit = !!stand;
+  showModal(`${isEdit ? 'Modifier' : 'Nouveau'} stand`, `
+    <div id="stand-modal-error"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Numéro</label><input id="st-numero" value="${stand?.numero || ''}" placeholder="Ex: A12"></div>
+      <div class="form-group"><label>Hall</label><input id="st-hall" value="${stand?.hall || ''}" placeholder="Ex: Hall 3"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Nom exposant</label><input id="st-exposant" value="${stand?.nom_exposant || ''}"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Emplacement</label><input id="st-emplacement" value="${stand?.emplacement || ''}" placeholder="Ex: Allée B, stand d'angle"></div>
+    </div>`,
+    async () => {
+      const payload = { evenement_id: evenementId, numero: document.getElementById('st-numero').value.trim(), hall: document.getElementById('st-hall').value.trim() || null, nom_exposant: document.getElementById('st-exposant').value.trim() || null, emplacement: document.getElementById('st-emplacement').value.trim() || null };
+      if (!payload.numero) { showError('stand-modal-error', 'Le numéro de stand est obligatoire.'); return false; }
+      const { error } = isEdit ? await sb.from('stands').update(payload).eq('id', stand.id) : await sb.from('stands').upsert(payload, { onConflict: 'evenement_id,numero' });
+      if (error) { showError('stand-modal-error', error.message); return false; }
+      await loadStandsTab(evenementId);
+      return true;
+    }, isEdit ? 'Enregistrer' : 'Créer'
+  );
+}
+
+// ── Onglet Accès (réutilise openModalAcces en inline plutôt qu'en modale) ────
+async function renderTabAcces(ev) {
+  const el = document.getElementById('fiche-tab-content');
+  el.innerHTML = `<div class="card">
+    <div class="card-header"><div class="card-title">Accès à l'événement</div><button class="btn btn-primary btn-sm" onclick="openModalAcces('${ev.id}','${ev.nom.replace(/'/g,"\\'")}')">+ Ajouter un accès</button></div>
+    <div class="card-body"><div id="acces-tab-list"></div></div>
+  </div>`;
+  await loadAccesTab(ev.id);
+}
+
+async function loadAccesTab(evenementId) {
+  const { data } = await sb.from('user_evenements').select('*, users(nom, prenom, email), prestataires(raison_sociale)').eq('evenement_id', evenementId);
+  const list = document.getElementById('acces-tab-list');
+  if (!data?.length) { list.innerHTML = `<div class="empty-state">Aucun accès configuré pour cet événement.</div>`; return; }
+  list.innerHTML = `<table><thead><tr><th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Prestataire</th><th></th></tr></thead><tbody>${data.map(a => `<tr><td><strong>${a.users?.prenom} ${a.users?.nom}</strong></td><td>${a.users?.email}</td><td>${badge(a.role_local)}</td><td>${a.prestataires?.raison_sociale || '—'}</td><td><button class="btn btn-danger btn-sm" onclick="revoquerAccesTab('${a.id}','${evenementId}')">Révoquer</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+async function revoquerAccesTab(id, evenementId) {
+  if (!confirm('Révoquer cet accès ?')) return;
+  await sb.from('user_evenements').delete().eq('id', id);
+  await loadAccesTab(evenementId);
+}
+
+// ── Onglet Prestations (réutilise loadPrestations / openModalPrestation) ────
+async function renderTabPrestations(ev) {
+  const el = document.getElementById('fiche-tab-content');
+  el.innerHTML = `<div class="card">
+    <div class="card-header">
+      <div class="card-title" id="prest-count">Chargement...</div>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary btn-sm" onclick="openModalImportPrestations('${ev.id}')">Importer</button>
+        <button class="btn btn-primary btn-sm" onclick="openModalPrestation(null,'${ev.id}')">+ Prestation</button>
+      </div>
+    </div>
+    <div class="card-body"><div id="prest-list"></div></div>
+  </div>`;
+  window._currentEvenementId = ev.id;
+  await loadPrestationsTab(ev.id);
+}
+
+async function loadPrestationsTab(evenementId) {
+  const { data, error } = await sb.from('prestations').select('*, stands!inner(numero, nom_exposant, evenement_id), prestataires(raison_sociale)').eq('stands.evenement_id', evenementId).order('created_at', { ascending: false });
+  const list = document.getElementById('prest-list');
+  const count = document.getElementById('prest-count');
+  if (error || !data?.length) { list.innerHTML = `<div class="empty-state"><div class="empty-icon">▤</div><div>Aucune prestation pour cet événement</div></div>`; count.textContent = '0 prestation'; return; }
+  count.textContent = `${data.length} prestation${data.length > 1 ? 's' : ''}`;
+  list.innerHTML = `<table><thead><tr><th>Stand</th><th>Libellé</th><th>Catégorie</th><th>Qté</th><th>Emplacement</th><th>Prestataire</th><th>Actions</th></tr></thead><tbody>${data.map(p => `<tr><td><strong>${p.stands?.numero}</strong>${p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td><td>${p.libelle}</td><td>${p.categorie || '—'}</td><td>${p.quantite_attendue}</td><td>${p.emplacement_prevu || '—'}</td><td>${p.prestataires?.raison_sociale ? `<span class="badge badge-prestataire">${p.prestataires.raison_sociale}</span>` : '<span class="text-muted">Non affecté</span>'}</td><td><button class="btn btn-secondary btn-sm" onclick='openModalPrestation(${JSON.stringify(p).replace(/'/g,"&apos;")}, "${evenementId}")'>Modifier</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+// ── UTILISATEURS ──────────────────────────────────────────────────────────────
+async function renderUtilisateurs() {
+  const el = document.getElementById('page-utilisateurs');
+  el.innerHTML = `<div class="page-header flex items-center justify-between"><div><div class="page-title">Utilisateurs</div><div class="page-subtitle">Comptes et profils</div></div><button class="btn btn-primary" onclick="openModalUser()">+ Nouvel utilisateur</button></div><div class="card"><div class="card-header"><div class="card-title" id="user-count">Chargement...</div></div><div class="card-body"><div id="user-list"></div></div></div>`;
+  await loadUsers();
+}
+
+async function loadUsers() {
+  const { data, error } = await sb.from('users').select('*').order('nom');
+  const list = document.getElementById('user-list');
+  const count = document.getElementById('user-count');
+  if (error || !data?.length) { list.innerHTML = `<div class="empty-state"><div>Aucun utilisateur trouvé</div></div>`; count.textContent = '0 utilisateur'; return; }
+  count.textContent = `${data.length} utilisateur${data.length > 1 ? 's' : ''}`;
+  list.innerHTML = `<table><thead><tr><th>Nom</th><th>Email</th><th>Profil</th><th>Actions</th></tr></thead><tbody>${data.map(u => `<tr><td><strong>${u.prenom} ${u.nom}</strong></td><td>${u.email}</td><td>${u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-organisateur">Utilisateur</span>'}</td><td><button class="btn btn-secondary btn-sm" onclick="openModalUser(${JSON.stringify(u).replace(/"/g,'&quot;')})">Modifier</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+function openModalUser(user = null) {
+  const isEdit = !!user;
+  showModal(`${isEdit ? 'Modifier' : 'Nouvel'} utilisateur`, `
+    <div id="user-modal-error"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Prénom</label><input id="u-prenom" value="${user?.prenom || ''}"></div>
+      <div class="form-group"><label>Nom</label><input id="u-nom" value="${user?.nom || ''}"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Email</label><input type="email" id="u-email" value="${user?.email || ''}" ${isEdit ? 'disabled' : ''}></div>
+      ${!isEdit ? `<div class="form-group" style="grid-column:1/-1"><label>Mot de passe</label><input type="password" id="u-pwd" placeholder="Minimum 8 caractères"></div>` : ''}
+      <div class="form-group" style="grid-column:1/-1"><label><input type="checkbox" id="u-admin" ${user?.is_admin ? 'checked' : ''} style="width:auto;margin-right:8px">Administrateur plateforme</label></div>
+    </div>`,
+    async () => {
+      const prenom = document.getElementById('u-prenom').value.trim();
+      const nom = document.getElementById('u-nom').value.trim();
+      const email = document.getElementById('u-email').value.trim();
+      const is_admin = document.getElementById('u-admin').checked;
+      if (!prenom || !nom || !email) { showError('user-modal-error', 'Tous les champs sont obligatoires.'); return false; }
+      if (isEdit) {
+        const { error } = await sb.from('users').update({ prenom, nom, is_admin }).eq('id', user.id);
+        if (error) { showError('user-modal-error', error.message); return false; }
+      } else {
+        const pwd = document.getElementById('u-pwd').value;
+        if (pwd.length < 8) { showError('user-modal-error', 'Mot de passe minimum 8 caractères.'); return false; }
+        const { data, error } = await sbAdmin.auth.admin.createUser({ email, password: pwd, email_confirm: true, user_metadata: { prenom, nom } });
+        if (error) { showError('user-modal-error', error.message); return false; }
+        await sbAdmin.from('users').update({ prenom, nom, is_admin }).eq('id', data.user.id);
+      }
+      await loadUsers();
+      return true;
+    }, isEdit ? 'Enregistrer' : 'Créer'
+  );
+}
+
+// ── PRESTATAIRES ──────────────────────────────────────────────────────────────
+async function renderPrestataires() {
+  const el = document.getElementById('page-prestataires');
+  el.innerHTML = `<div class="page-header flex items-center justify-between"><div><div class="page-title">Prestataires</div><div class="page-subtitle">Sociétés intervenantes</div></div><button class="btn btn-primary" onclick="openModalPrestataire()">+ Nouveau prestataire</button></div><div class="card"><div class="card-header"><div class="card-title" id="presta-count">Chargement...</div></div><div class="card-body"><div id="presta-list"></div></div></div>`;
+  await loadPrestataires();
+}
+
+async function loadPrestataires() {
+  const { data } = await sb.from('prestataires').select('*').order('raison_sociale');
+  const list = document.getElementById('presta-list');
+  const count = document.getElementById('presta-count');
+  if (!data?.length) { list.innerHTML = `<div class="empty-state"><div class="empty-icon">◎</div><div>Aucun prestataire enregistré</div><div class="mt-4"><button class="btn btn-primary" onclick="openModalPrestataire()">Ajouter un prestataire</button></div></div>`; count.textContent = '0 prestataire'; return; }
+  count.textContent = `${data.length} prestataire${data.length > 1 ? 's' : ''}`;
+  list.innerHTML = `<table><thead><tr><th>Raison sociale</th><th>Email contact</th><th>Téléphone</th><th>Actions</th></tr></thead><tbody>${data.map(p => `<tr><td><strong>${p.raison_sociale}</strong></td><td>${p.email_contact || '—'}</td><td>${p.telephone || '—'}</td><td><div class="flex gap-2"><button class="btn btn-secondary btn-sm" onclick="openModalPrestataire(${JSON.stringify(p).replace(/"/g,'&quot;')})">Modifier</button><button class="btn btn-secondary btn-sm" onclick="openModalContacts('${p.id}','${(p.raison_sociale||'').replace(/'/g,"\\'")}')">Intervenants</button></div></td></tr>`).join('')}</tbody></table>`;
+}
+
+// ── ANNUAIRE INTERVENANTS PRESTATAIRE ────────────────────────────────────────
+async function openModalContacts(prestataireId, nomPrestataire) {
+  const { data: allUsers } = await sb.from('users').select('*').order('nom');
+  const { data: contacts } = await sb.from('prestataire_contacts').select('*, users(id, nom, prenom, email)').eq('prestataire_id', prestataireId);
+
+  const contactIds = new Set((contacts || []).map(c => c.user_id));
+  const availableUsers = (allUsers || []).filter(u => !contactIds.has(u.id));
+  const usersOptions = availableUsers.map(u => `<option value="${u.id}">${u.prenom} ${u.nom} (${u.email})</option>`).join('');
+
+  const contactsHtml = (contacts || []).map(c => `<tr><td>${c.users?.prenom} ${c.users?.nom}</td><td>${c.users?.email}</td><td><button class="btn btn-danger btn-sm" onclick="retirerContact('${c.id}','${prestataireId}','${nomPrestataire.replace(/'/g,"\\'")}')">Retirer</button></td></tr>`).join('');
+
+  showModal(`Intervenants — ${nomPrestataire}`, `
+    <div id="contacts-error"></div>
+    <p class="text-muted" style="margin-bottom:16px">Ces personnes constituent l'annuaire de la société. Elles pourront ensuite être assignées comme contrôleur prestataire sur un événement spécifique.</p>
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">Intervenants actuels</div>
+      ${contacts?.length ? `<table><thead><tr><th>Nom</th><th>Email</th><th></th></tr></thead><tbody>${contactsHtml}</tbody></table>` : '<div class="text-muted">Aucun intervenant rattaché</div>'}
+    </div>
+    ${availableUsers.length ? `<div style="border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Ajouter un intervenant</div>
+      <div class="form-group"><label>Utilisateur</label><select id="contact-user">${usersOptions}</select></div>
+    </div>` : '<div class="text-muted" style="border-top:1px solid var(--border);padding-top:16px">Tous les utilisateurs existants sont déjà rattachés. <a href="#" onclick="closeModal();navigate(\'utilisateurs\');return false;" style="color:var(--accent-dark)">Créer un nouvel utilisateur</a></div>'}`,
+    async () => {
+      const userId = document.getElementById('contact-user')?.value;
+      if (!userId) return false;
+      const { error } = await sb.from('prestataire_contacts').insert({ user_id: userId, prestataire_id: prestataireId });
+      if (error) { showError('contacts-error', error.message); return false; }
+      openModalContacts(prestataireId, nomPrestataire);
+      return false;
+    }, availableUsers.length ? 'Ajouter' : 'Fermer'
+  );
+}
+
+async function retirerContact(contactId, prestataireId, nomPrestataire) {
+  if (!confirm('Retirer cet intervenant de la société ?')) return;
+  await sb.from('prestataire_contacts').delete().eq('id', contactId);
+  openModalContacts(prestataireId, nomPrestataire);
+}
+
+function openModalPrestataire(p = null) {
+  const isEdit = !!p;
+  showModal(`${isEdit ? 'Modifier' : 'Nouveau'} prestataire`, `
+    <div id="presta-modal-error"></div>
+    <div class="form-group"><label>Raison sociale</label><input id="p-nom" value="${p?.raison_sociale || ''}" placeholder="Ex: Carpentier Décoration SARL"></div>
+    <div class="form-group"><label>Email de contact</label><input type="email" id="p-email" value="${p?.email_contact || ''}" placeholder="contact@societe.fr"></div>
+    <div class="form-group"><label>Téléphone</label><input id="p-tel" value="${p?.telephone || ''}" placeholder="06 00 00 00 00"></div>`,
+    async () => {
+      const payload = { raison_sociale: document.getElementById('p-nom').value.trim(), email_contact: document.getElementById('p-email').value.trim() || null, telephone: document.getElementById('p-tel').value.trim() || null };
+      if (!payload.raison_sociale) { showError('presta-modal-error', 'La raison sociale est obligatoire.'); return false; }
+      const { error } = isEdit ? await sb.from('prestataires').update(payload).eq('id', p.id) : await sb.from('prestataires').insert(payload);
+      if (error) { showError('presta-modal-error', error.message); return false; }
+      await loadPrestataires();
+      return true;
+    }, isEdit ? 'Enregistrer' : 'Créer'
+  );
+}
+
+// ── PRESTATIONS (modale partagée, utilisée depuis l'onglet Prestations) ─────
+async function openModalPrestation(prest, evenementId) {
+  const isEdit = !!prest;
+  const { data: stands } = await sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero');
+  const { data: prestataires } = await sb.from('prestataires').select('*').order('raison_sociale');
+
+  if (!stands?.length) {
+    showModal('Aucun stand disponible', `<p>Vous devez d'abord ajouter des stands à cet événement avant de créer des prestations.</p>`, async () => { switchFicheTab('stands'); return true; }, 'Aller aux stands');
+    return;
+  }
+
+  const standsOptions = stands.map(s => `<option value="${s.id}" ${prest?.stand_id === s.id ? 'selected' : ''}>${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}</option>`).join('');
+  const prestaOptions = `<option value="">— Non affecté —</option>` + (prestataires || []).map(p => `<option value="${p.id}" ${prest?.prestataire_id === p.id ? 'selected' : ''}>${p.raison_sociale}</option>`).join('');
+
+  showModal(`${isEdit ? 'Modifier' : 'Nouvelle'} prestation`, `
+    <div id="prest-modal-error"></div>
+    <div class="form-group"><label>Stand</label><select id="pr-stand">${standsOptions}</select></div>
+    <div class="grid-2">
+      <div class="form-group" style="grid-column:1/-1"><label>Libellé de l'équipement</label><input id="pr-libelle" value="${prest?.libelle || ''}" placeholder="Ex: Mange-debout haut"></div>
+      <div class="form-group"><label>Catégorie</label><input id="pr-categorie" value="${prest?.categorie || ''}" placeholder="Ex: Mobilier"></div>
+      <div class="form-group"><label>Quantité attendue</label><input type="number" min="1" id="pr-qte" value="${prest?.quantite_attendue || 1}"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Emplacement prévu</label><input id="pr-emplacement" value="${prest?.emplacement_prevu || ''}" placeholder="Ex: Fond de stand, côté gauche"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Prestataire affecté</label><select id="pr-presta">${prestaOptions}</select></div>
+    </div>`,
+    async () => {
+      const payload = {
+        stand_id: document.getElementById('pr-stand').value,
+        libelle: document.getElementById('pr-libelle').value.trim(),
+        categorie: document.getElementById('pr-categorie').value.trim() || null,
+        quantite_attendue: parseInt(document.getElementById('pr-qte').value) || 1,
+        emplacement_prevu: document.getElementById('pr-emplacement').value.trim() || null,
+        prestataire_id: document.getElementById('pr-presta').value || null,
+      };
+      if (!payload.libelle || !payload.stand_id) { showError('prest-modal-error', 'Le stand et le libellé sont obligatoires.'); return false; }
+      if (!payload.prestataire_id) {
+        // la table exige un prestataire_id not null -> on bloque proprement côté UI si laissé vide
+        showError('prest-modal-error', 'Un prestataire doit être affecté (vous pourrez le changer plus tard).');
+        return false;
+      }
+      const { error } = isEdit ? await sb.from('prestations').update(payload).eq('id', prest.id) : await sb.from('prestations').insert(payload);
+      if (error) { showError('prest-modal-error', error.message); return false; }
+      await loadPrestationsTab(evenementId);
+      return true;
+    }, isEdit ? 'Enregistrer' : 'Créer'
+  );
+}
+
+function openModalImportPrestations(evenementId) {
+  if (!evenementId) return;
+  showModal(`Importer les prestations`, `
+    <div id="import-prest-error"></div>
+    <p class="text-muted" style="margin-bottom:12px">Colonnes attendues : <strong>numero_stand</strong>, <strong>libelle</strong>, categorie, quantite, emplacement, <strong>raison_sociale_prestataire</strong>. Le stand et le prestataire doivent déjà exister.</p>
+    <button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="downloadTemplate('prestations')">↓ Télécharger le modèle Excel</button>
+    <div class="import-zone" id="drop-zone-prest" onclick="document.getElementById('import-file-prest').click()">
+      <div class="import-icon">↑</div>
+      <div class="import-text">Glissez votre fichier Excel ou CSV ici, ou <strong>cliquez pour choisir</strong></div>
+      <div id="file-name-prest" style="margin-top:8px;font-size:13px;color:var(--accent-dark)"></div>
+    </div>
+    <input type="file" id="import-file-prest" accept=".xlsx,.xls,.csv" style="display:none">
+    <div id="import-prest-preview" style="margin-top:16px"></div>`,
+    async () => {
+      const rows = window._importedRows;
+      if (!rows?.length) { showError('import-prest-error', 'Veuillez sélectionner un fichier.'); return false; }
+
+      const { data: stands } = await sb.from('stands').select('id, numero').eq('evenement_id', evenementId);
+      const { data: prestataires } = await sb.from('prestataires').select('id, raison_sociale');
+      const standMap = Object.fromEntries((stands || []).map(s => [String(s.numero).trim().toLowerCase(), s.id]));
+      const prestaMap = Object.fromEntries((prestataires || []).map(p => [p.raison_sociale.trim().toLowerCase(), p.id]));
+
+      const toInsert = [];
+      const erreurs = [];
+      rows.forEach((r, i) => {
+        const numStand = String(r.numero_stand ?? '').trim();
+        const libelle = String(r.libelle ?? '').trim();
+        const categorie = r.categorie ?? null;
+        const qte = r.quantite ?? 1;
+        const emplacement = r.emplacement ?? null;
+        const raisonSociale = String(r.raison_sociale_prestataire ?? '').trim();
+        if (!numStand || !libelle) return;
+        const standId = standMap[numStand.toLowerCase()];
+        const prestaId = raisonSociale ? prestaMap[raisonSociale.toLowerCase()] : null;
+        if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${numStand}" introuvable`); return; }
+        if (!prestaId) { erreurs.push(`Ligne ${i + 2} : prestataire "${raisonSociale || '(vide)'}" introuvable`); return; }
+        toInsert.push({ stand_id: standId, libelle, categorie: categorie || null, quantite_attendue: parseInt(qte) || 1, emplacement_prevu: emplacement || null, prestataire_id: prestaId });
+      });
+
+      if (erreurs.length) { showError('import-prest-error', `${erreurs.length} ligne(s) ignorée(s) : ${erreurs.slice(0, 5).join(' · ')}${erreurs.length > 5 ? '…' : ''}`); }
+      if (!toInsert.length) { return false; }
+      const { error } = await sb.from('prestations').insert(toInsert);
+      if (error) { showError('import-prest-error', error.message); return false; }
+      await loadPrestationsTab(evenementId);
+      return true;
+    }, 'Importer'
+  );
+  bindImportFile('import-file-prest', 'drop-zone-prest', 'file-name-prest', 'import-prest-preview',
+    ['numero_stand', 'libelle', 'categorie', 'quantite', 'emplacement', 'raison_sociale_prestataire']);
+}
+
+// ── HELPERS IMPORT / EXPORT EXCEL (SheetJS) ──────────────────────────────────
+const TEMPLATES = {
+  stands: {
+    filename: 'modele_stands.xlsx',
+    sheetName: 'Stands',
+    headers: ['numero', 'nom_exposant', 'hall', 'emplacement'],
+    example: [['A12', 'Société Dupont Mobilier', 'Hall 3', "Allée B, stand d'angle"], ['A13', 'Tech Innovations SARL', 'Hall 3', '']],
+  },
+  prestations: {
+    filename: 'modele_prestations.xlsx',
+    sheetName: 'Prestations',
+    headers: ['numero_stand', 'libelle', 'categorie', 'quantite', 'emplacement', 'raison_sociale_prestataire'],
+    example: [['A12', 'Mange-debout haut', 'Mobilier', 4, 'Fond de stand', 'Carpentier Décoration SARL'], ['A12', 'Spot LED orientable', 'Éclairage', 6, '', 'Elec Events']],
+  },
+};
+
+function downloadTemplate(kind) {
+  const t = TEMPLATES[kind];
+  const ws = XLSX.utils.aoa_to_sheet([t.headers, ...t.example]);
+  ws['!cols'] = t.headers.map(h => ({ wch: Math.max(h.length + 4, 16) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t.sheetName);
+  XLSX.writeFile(wb, t.filename);
+}
+
+// Lit un fichier .xlsx/.xls/.csv et retourne un tableau d'objets {colonne: valeur}
+function parseSpreadsheetFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        resolve(rows);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Branche un input file + zone de drop sur la lecture et l'aperçu, alimente window._importedRows
+function bindImportFile(inputId, zoneId, fileNameId, previewId, expectedCols) {
+  const handle = async (file) => {
+    if (!file) return;
+    document.getElementById(fileNameId).textContent = file.name;
+    try {
+      const rows = await parseSpreadsheetFile(file);
+      window._importedRows = rows;
+      const preview = rows.slice(0, 5);
+      const cols = expectedCols;
+      document.getElementById(previewId).innerHTML = rows.length
+        ? `<div class="text-muted" style="margin-bottom:8px">Aperçu (${preview.length} sur ${rows.length} lignes) :</div><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${preview.map(r => `<tr>${cols.map(c => `<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+        : `<div class="alert alert-error">Le fichier ne contient aucune ligne exploitable.</div>`;
+    } catch (err) {
+      document.getElementById(previewId).innerHTML = `<div class="alert alert-error">Impossible de lire ce fichier : ${err.message}</div>`;
+      window._importedRows = null;
+    }
+  };
+
+  setTimeout(() => {
+    const input = document.getElementById(inputId);
+    const zone = document.getElementById(zoneId);
+    if (!input || !zone) return;
+    input.addEventListener('change', () => handle(input.files[0]));
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f) { input.files = e.dataTransfer.files; handle(f); }
+    });
+  }, 50);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function fmt(d) { if (!d) return '—'; const [y, m, j] = d.split('-'); return `${j}/${m}/${y}`; }
+
+function badge(statut) {
+  const labels = { parametrage: 'Paramétrage', actif: 'Actif', termine: 'Terminé', admin: 'Admin', organisateur: 'Organisateur', controleur: 'Contrôleur', prestataire: 'Prestataire' };
+  return `<span class="badge badge-${statut}">${labels[statut] || statut}</span>`;
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = `<div class="alert alert-error">${msg}</div>`;
+}
+
+function showModal(title, body, onConfirm, confirmLabel = 'Confirmer') {
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-header"><div class="modal-title">${title}</div><button class="modal-close" onclick="closeModal()">×</button></div>
+        <div class="modal-body">${body}</div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Annuler</button><button class="btn btn-primary" id="modal-confirm-btn" onclick="handleConfirm()">${confirmLabel}</button></div>
+      </div>
+    </div>`;
+  window._modalConfirm = onConfirm;
+}
+
+async function handleConfirm() {
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  const result = await window._modalConfirm?.();
+  if (result !== false) closeModal();
+  else { btn.disabled = false; btn.innerHTML = btn.getAttribute('data-label') || 'Confirmer'; }
+}
+
+function closeModal() { document.getElementById('modal-container').innerHTML = ''; }
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "conformite-evenements",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "admin": "npm -w packages/admin run dev",
+    "build:admin": "npm -w packages/admin run build"
+  }
+}
