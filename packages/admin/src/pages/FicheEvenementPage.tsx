@@ -1162,7 +1162,8 @@ function TabPrestataires({ ev }: { ev: Evenement }) {
 
   async function create(): Promise<boolean> {
     if (!newNom) { setNewError('La raison sociale est obligatoire.'); return false }
-    const { error } = await sb.from('prestataires').insert({ raison_sociale: newNom, email_contact: newEmail || null, telephone: newTel || null })
+    if (newEmail && !isValidEmail(newEmail)) { setNewError('Format d\'email invalide.'); return false }
+    const { error } = await sb.from('prestataires').insert({ raison_sociale: newNom, email_contact: normalizeEmail(newEmail) || null, telephone: newTel || null })
     if (error) { setNewError(error.message); return false }
     setNewNom(''); setNewEmail(''); setNewTel('')
     load(); return true

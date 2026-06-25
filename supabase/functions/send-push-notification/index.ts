@@ -18,14 +18,19 @@ async function signVapid(audience: string): Promise<string> {
 }
 
 Deno.serve(async req => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type' } })
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   const { user_ids, title, body, url } = await req.json() as { user_ids: string[]; title: string; body: string; url?: string }
 
   const sbAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const { data: subs } = await sbAdmin.from('push_subscriptions').select('*').in('user_id', user_ids)
 
-  if (!subs?.length) return Response.json({ sent: 0 })
+  if (!subs?.length) return Response.json({ sent: 0 }, { headers: corsHeaders })
 
   let sent = 0
   for (const sub of subs) {
@@ -48,5 +53,5 @@ Deno.serve(async req => {
     } catch (_) { /* ignore */ }
   }
 
-  return Response.json({ sent })
+  return Response.json({ sent }, { headers: corsHeaders })
 })
