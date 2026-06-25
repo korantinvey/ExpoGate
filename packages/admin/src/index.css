@@ -178,9 +178,11 @@ textarea { resize: vertical; min-height: 80px; }
   .card-header { flex-wrap: wrap; gap: 8px; }
   .card-header .flex { flex-wrap: wrap; }
 
-  /* Tables → scroll horizontal */
+  /* Tables → scroll horizontal + texte compact */
   .card-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { min-width: 480px; }
+  table { min-width: 480px; font-size: 12px; }
+  table th, table td { padding: 6px 8px; }
+  .btn-sm { padding: 4px 6px; font-size: 11px; }
 
   /* Grilles → 1 colonne */
   .grid-2 { grid-template-columns: 1fr !important; }
