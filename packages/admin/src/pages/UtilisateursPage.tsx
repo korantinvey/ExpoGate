@@ -98,7 +98,7 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_ROLE}` },
         body: JSON.stringify({ user_ids: [user.id], title: title.trim(), body: body.trim() }),
       })
       const data = await res.json()
