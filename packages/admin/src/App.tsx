@@ -52,13 +52,18 @@ function AppRoutes() {
   }
 
   const pushBanner = showBanner ? (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, background: 'var(--accent)', padding: '12px 16px' }}>
-      <button onClick={async () => { await requestPermission(); dismissBanner() }}
-        style={{ display: 'block', width: '100%', background: 'white', border: 'none', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', textAlign: 'left' }}>
-        <div style={{ fontWeight: 600, color: 'var(--accent-dark)', fontSize: 14 }}>🔔 Activer les notifications push</div>
-        <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>Touchez ici pour recevoir les alertes en temps réel</div>
-      </button>
-      <button onClick={dismissBanner} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: 22, lineHeight: 1, padding: 4 }}>×</button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Activer les notifications</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>Recevez les alertes de non-conformité en temps réel sur cet appareil.</div>
+        <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={async () => { await requestPermission(); dismissBanner() }}>
+          Activer les notifications
+        </button>
+        <button onClick={dismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>
+          Plus tard
+        </button>
+      </div>
     </div>
   ) : null
 

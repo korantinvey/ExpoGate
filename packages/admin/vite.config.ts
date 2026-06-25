@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-
 export default defineConfig({
+  server: {
+    allowedHosts: ['feed-penknife-runway.ngrok-free.dev'],
+  },
   plugins: [
     react(),
     VitePWA({
@@ -29,6 +31,10 @@ export default defineConfig({
       filename: 'sw.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
       },
     }),
   ],

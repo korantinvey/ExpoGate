@@ -102,8 +102,9 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
         body: JSON.stringify({ user_ids: [user.id], title: title.trim(), body: body.trim() }),
       })
       const data = await res.json()
+      await sb.from('messages').insert({ user_id: user.id, title: title.trim(), body: body.trim() })
       if (data.sent > 0) notify('Notification envoyée', 'success')
-      else notify('Aucun appareil enregistré pour cet utilisateur', 'error')
+      else notify('Message enregistré (aucun appareil push enregistré)', 'success')
       onClose()
     } catch {
       notify('Erreur lors de l\'envoi', 'error')
