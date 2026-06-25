@@ -100,8 +100,12 @@ export function UtilisateursPage() {
   }
 
   async function load() {
-    const { data } = await sb.from('users').select('*').order('nom')
-    setUsers(data ?? [])
+    const [{ data: usersData }, { data: authData }] = await Promise.all([
+      sb.from('users').select('*').order('nom'),
+      sbAdmin.auth.admin.listUsers({ perPage: 1000 }),
+    ])
+    const signInMap = new Map(authData?.users.map(u => [u.id, u.last_sign_in_at]) ?? [])
+    setUsers((usersData ?? []).map(u => ({ ...u, last_sign_in_at: signInMap.get(u.id) ?? null })))
   }
 
   useEffect(() => { load() }, [])
@@ -132,6 +136,7 @@ export function UtilisateursPage() {
               { key: 'nom', label: 'Nom', sortable: true, filterable: true, getValue: u => `${u.prenom} ${u.nom}`, render: u => <span style={{ fontWeight: 600 }}>{u.prenom} {u.nom}</span> },
               { key: 'email', label: 'Email', sortable: true, filterable: true },
               { key: 'is_admin', label: 'Profil', sortable: true, filterable: true, options: [{ value: 'Admin', label: 'Admin' }, { value: 'Utilisateur', label: 'Utilisateur' }], getValue: u => u.is_admin ? 'Admin' : 'Utilisateur', render: u => u.is_admin ? <Badge statut="admin" /> : <Badge statut="organisateur" /> },
+              { key: 'last_sign_in_at', label: 'Dernière connexion', sortable: true, hideOnMobile: true, getValue: u => u.last_sign_in_at ?? '', render: u => u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : <span className="text-muted">Jamais</span> },
               { key: 'actions', label: '', render: u => (
                 <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(u.email) }}>
                   Envoyer l'invitation

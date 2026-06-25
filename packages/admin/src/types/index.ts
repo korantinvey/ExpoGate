@@ -19,6 +19,7 @@ export interface User {
   prenom: string
   is_admin: boolean
   created_at: string
+  last_sign_in_at?: string | null
 }
 
 export interface Prestataire {
