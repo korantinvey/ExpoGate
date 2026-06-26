@@ -14,6 +14,7 @@ import { EvenementsOrganisateurPage } from './pages/EvenementsOrganisateurPage'
 import { FicheEvenementOrganisateurPage } from './pages/FicheEvenementOrganisateurPage'
 import { sb } from './lib/supabase'
 import { usePushNotifications } from './hooks/usePushNotifications'
+import { ThemeContext, useThemeProvider } from './hooks/useTheme'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -101,6 +102,7 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const themeCtx = useThemeProvider()
   const [isRecovery, setIsRecovery] = useState(() => {
     const hash = window.location.hash
     return hash.includes('type=recovery') || hash.includes('type=invite')
@@ -123,10 +125,12 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeContext.Provider value={themeCtx}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeContext.Provider>
   )
 }

@@ -104,7 +104,7 @@ export function EvenementsPage() {
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouvel événement</button>
           </div>
         </div>
-        <div className="card-body">
+        <div className="card-body" style={{ overflowX: 'auto' }}>
           <DataTable
             data={events}
             exportFilename="evenements"

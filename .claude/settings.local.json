@@ -7,7 +7,8 @@
       "Bash(npm install *)",
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\projets\\\\conformite-evenements\\\\packages\\\\admin\\\\public\")",
       "mcp__visualize__read_me",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "Bash(git push *)"
     ],
     "defaultMode": "bypassPermissions"
   }

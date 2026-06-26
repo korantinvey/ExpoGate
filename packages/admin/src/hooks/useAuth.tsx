@@ -26,9 +26,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    sb.auth.getSession().then(({ data: { session }, error }) => {
-      if (error || !session?.user) { setLoading(false); return }
-      void loadUser(session.user)
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { setLoading(false); return }
+      // Refresh the token immediately if it expires within 5 minutes
+      const expiresAt = session.expires_at ?? 0
+      const fiveMinutes = 5 * 60
+      if (expiresAt - Date.now() / 1000 < fiveMinutes) {
+        sb.auth.refreshSession().then(({ data: { session: refreshed } }) => {
+          if (refreshed?.user) void loadUser(refreshed.user)
+          else { setLoading(false) }
+        })
+      } else {
+        void loadUser(session.user)
+      }
     })
 
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {

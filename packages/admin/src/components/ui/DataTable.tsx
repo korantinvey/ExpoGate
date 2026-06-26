@@ -184,3 +184,7 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
     </table>
   )
 }
+
+export function DataTableWrapper({ children }: { children: React.ReactNode }) {
+  return <div style={{ overflowX: 'auto', width: '100%' }}>{children}</div>
+}

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { LogoExpogate } from './LogoExpogate'
 
 interface Props {
   open: boolean
@@ -11,8 +12,8 @@ export function Sidebar({ open, onClose }: Props) {
       {open && <div className="sidebar-overlay" onClick={onClose} />}
       <aside className={`sidebar${open ? ' sidebar-open' : ''}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo">Expogate</div>
-          <div className="sidebar-subtitle">Back-office Admin</div>
+          <LogoExpogate height={36} />
+          <div className="sidebar-subtitle" style={{ marginTop: 6 }}>Back-office Admin</div>
           <button className="sidebar-close" onClick={onClose}>×</button>
         </div>
         <nav className="sidebar-nav">

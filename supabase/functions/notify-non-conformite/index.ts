@@ -77,13 +77,16 @@ Deno.serve(async (req) => {
     // Récupère les utilisateurs rattachés à ce prestataire sur cet événement
     const { data: membres } = await sbAdmin
       .from('user_evenements')
-      .select('users ( email, prenom, nom )')
+      .select('user_id, users ( email, prenom, nom )')
       .eq('evenement_id', stand.evenement_id)
       .eq('prestataire_id', prestataire.id)
 
     const destinataires = (membres ?? [])
-      .map((m: { users: { email: string; prenom: string; nom: string } | null }) => m.users)
-      .filter((u): u is { email: string; prenom: string; nom: string } => !!u?.email)
+      .map((m: { user_id: string; users: { email: string; prenom: string; nom: string } | null }) => ({
+        id: m.user_id,
+        ...m.users,
+      }))
+      .filter((u): u is { id: string; email: string; prenom: string; nom: string } => !!u.email)
 
     if (destinataires.length === 0) {
       return new Response(JSON.stringify({ skipped: true, reason: 'Aucun utilisateur avec email rattaché à ce prestataire.' }), {
@@ -180,7 +183,28 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: `Resend: ${body}` }), { status: 500, headers: corsHeaders })
     }
 
-    return new Response(JSON.stringify({ sent: true }), {
+    // Notifications in-app + push pour tous les destinataires
+    const msgTitle = `${statutLabel} — ${presta.libelle}`
+    const msgBody = `Stand ${standInfo} · ${evenementNom}${presta.commentaire ? ` — ${presta.commentaire}` : ''}`
+
+    // In-app messages (un par user)
+    for (const u of destinataires) {
+      await sbAdmin.from('messages').insert({ user_id: u.id, title: msgTitle, body: msgBody })
+    }
+
+    // Push notification groupée
+    const userIds = destinataires.map(u => u.id)
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'apikey': Deno.env.get('SUPABASE_ANON_KEY')!,
+      },
+      body: JSON.stringify({ user_ids: userIds, title: msgTitle, body: msgBody }),
+    }).catch(() => {})
+
+    return new Response(JSON.stringify({ sent: true, notified: destinataires.length }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
