@@ -21,7 +21,7 @@ export function LayoutOrganisateur() {
         <div className="topbar-user" style={{ marginLeft: 'auto', flexShrink: 0, gap: 6 }}>
           <NotifDropdown unread={unread} messages={messages} markAllRead={markAllRead} userName={`${user?.prenom} ${user?.nom}`} />
           <button onClick={() => setSettingsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)', padding: '2px' }} title="Paramètres">⚙️</button>
-          <button className="btn-logout" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => sb.auth.signOut()}>Quitter</button>
+          <button className="btn-logout" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => sb.auth.signOut()}>Déconnexion</button>
         </div>
       </header>
       <main className="main-content">
