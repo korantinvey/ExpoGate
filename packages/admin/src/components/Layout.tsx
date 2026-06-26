@@ -21,7 +21,6 @@ export function Layout() {
       <div className="main-wrapper">
         <header className="mobile-topbar">
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>☰</button>
-          <span className="mobile-topbar-title">Expogate Admin</span>
           <div className="topbar-user" style={{ marginLeft: 'auto' }}>
             <NotifDropdown unread={unread} messages={messages} markAllRead={markAllRead} userName={`${user?.prenom} ${user?.nom}`} />
             <button onClick={() => setSettingsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)', padding: '2px 4px' }} title="Paramètres">⚙️</button>
