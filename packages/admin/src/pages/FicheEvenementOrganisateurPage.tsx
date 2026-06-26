@@ -212,6 +212,7 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [modal, setModal] = useState<Stand | null | 'new'>(null)
   const [viewingPrestations, setViewingPrestations] = useState<Stand | null>(null)
+  const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
@@ -257,7 +258,8 @@ function TabStands({ ev }: { ev: Evenement }) {
       </div>
       {modal !== null && <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />}
       {importing && <ImportStandsModal evenementId={ev.id} nomEvenement={ev.nom} onDone={() => { setImporting(false); load() }} />}
-      {viewingPrestations && <StandPrestationsModal stand={viewingPrestations} onClose={() => setViewingPrestations(null)} />}
+      {viewingPrestations && <StandPrestationsModal stand={viewingPrestations} onClose={() => setViewingPrestations(null)} onEditPrestation={p => { setViewingPrestations(null); setEditingPrestation(p) }} />}
+      {editingPrestation && <PrestationForm prest={editingPrestation} evenementId={ev.id} onSaved={() => { setEditingPrestation(null); load() }} onGoToStands={() => setEditingPrestation(null)} />}
     </>
   )
 }
