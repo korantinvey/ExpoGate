@@ -174,33 +174,35 @@ function StandPrestationsModal({ stand, onClose, onEditPrestation }: { stand: St
       {prestations.length === 0 ? (
         <div className="empty-state" style={{ padding: '24px 0' }}>Aucune prestation sur ce stand.</div>
       ) : (
-        <table style={{ width: '100%', fontSize: 14 }}>
-          <thead>
-            <tr>
-              <th>Libellé</th>
-              <th>Catégorie</th>
-              <th>Qté</th>
-              <th>Emplacement</th>
-              <th>Prestataire</th>
-              <th>Conformité</th>
-            </tr>
-          </thead>
-          <tbody>
-            {prestations.map(p => (
-              <tr key={p.id} style={{ ...(onEditPrestation ? { cursor: 'pointer' } : {}), ...conformiteBg(p.statut_conformite) }} onClick={() => onEditPrestation?.(p)}>
-                <td style={{ fontWeight: 600 }}>{p.libelle}</td>
-                <td>{p.categorie ?? '—'}</td>
-                <td>{p.quantite_attendue}</td>
-                <td>{p.emplacement_prevu ?? '—'}</td>
-                <td>{p.prestataires?.raison_sociale ?? '—'}</td>
-                <td>{p.statut_conformite
-                  ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
-                  : <span className="text-muted">—</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {prestations.map(p => {
+            const statut = p.statut_conformite
+            const bg = conformiteBg(statut)
+            const statutColor = statut ? STATUT_COLORS[statut] : undefined
+            const statutLabel = statut ? STATUT_LABELS[statut] : null
+            return (
+              <div key={p.id}
+                style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '10px 12px', cursor: onEditPrestation ? 'pointer' : undefined, ...bg }}
+                onClick={() => onEditPrestation?.(p)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{p.libelle}</span>
+                  {statutLabel && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: statutColor, background: `${statutColor}20`, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {statutLabel}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {p.categorie && <span>{p.categorie}</span>}
+                  {p.quantite_attendue != null && <span>{p.quantite_attendue} unité{p.quantite_attendue > 1 ? 's' : ''}</span>}
+                  {p.emplacement_prevu && <span>{p.emplacement_prevu}</span>}
+                  {p.prestataires?.raison_sociale && <span style={{ color: 'var(--text-muted)' }}>{p.prestataires.raison_sociale}</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </Modal>
   )
