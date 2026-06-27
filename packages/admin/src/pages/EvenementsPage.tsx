@@ -94,12 +94,11 @@ export function EvenementsPage() {
         <div className="card-header">
           <div className="card-title">{events.length} événement{events.length > 1 ? 's' : ''}</div>
           <div className="flex gap-2">
-            <select value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 13 }}>
-              <option value="">Tous les statuts</option>
-              <option value="parametrage">Paramétrage</option>
-              <option value="actif">Actif</option>
-              <option value="termine">Terminé</option>
-            </select>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {[{ v: '', l: 'Tous' }, { v: 'parametrage', l: 'Paramétrage' }, { v: 'actif', l: 'Actif' }, { v: 'termine', l: 'Terminé' }].map(({ v, l }) => (
+                <button key={v} onClick={() => setFilter(v)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 20, border: '1px solid var(--border)', cursor: 'pointer', background: filter === v ? 'var(--accent)' : 'var(--surface)', color: filter === v ? '#fff' : 'var(--text)', fontWeight: filter === v ? 600 : 400 }}>{l}</button>
+              ))}
+            </div>
             <ExportButton onClick={exportFn} />
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouvel événement</button>
           </div>

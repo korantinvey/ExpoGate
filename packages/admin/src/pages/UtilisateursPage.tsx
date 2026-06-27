@@ -166,7 +166,7 @@ export function UtilisateursPage() {
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouvel utilisateur</button>
           </div>
         </div>
-        <div className="card-body">
+        <div className="card-body" style={{ overflowX: 'auto' }}>
           <DataTable
             data={users}
             exportFilename="utilisateurs"

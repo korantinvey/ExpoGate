@@ -225,6 +225,44 @@ textarea { resize: vertical; min-height: 80px; }
 
   /* Import zone */
   .import-zone { padding: 20px 12px; }
+
+  /* Bottom nav mobile */
+  .mobile-bottom-nav { display: flex; }
+  .hide-on-mobile { display: none; }
+}
+
+/* Bottom nav — masqué par défaut (desktop) */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobile-bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  gap: 3px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.mobile-bottom-nav-item.active {
+  color: var(--accent);
+}
+.mobile-bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.mobile-bottom-nav-label {
+  font-size: 10px;
+  font-weight: 500;
 }
 
 

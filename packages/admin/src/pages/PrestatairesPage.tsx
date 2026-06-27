@@ -135,7 +135,7 @@ export function PrestatairesPage() {
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouveau prestataire</button>
           </div>
         </div>
-        <div className="card-body">
+        <div className="card-body" style={{ overflowX: 'auto' }}>
           <DataTable
             data={prestataires}
             exportFilename="prestataires"
