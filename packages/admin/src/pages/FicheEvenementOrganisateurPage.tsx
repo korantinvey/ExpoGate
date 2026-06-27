@@ -258,7 +258,7 @@ function TabStands({ ev }: { ev: Evenement }) {
       </div>
       {modal !== null && <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />}
       {importing && <ImportStandsModal evenementId={ev.id} nomEvenement={ev.nom} onDone={() => { setImporting(false); load() }} />}
-      {viewingPrestations && <StandPrestationsModal stand={viewingPrestations} onClose={() => setViewingPrestations(null)} onEditPrestation={p => { setViewingPrestations(null); setEditingPrestation(p) }} />}
+      {viewingPrestations && !editingPrestation && <StandPrestationsModal stand={viewingPrestations} onClose={() => setViewingPrestations(null)} onEditPrestation={p => setEditingPrestation(p)} />}
       {editingPrestation && <PrestationForm prest={editingPrestation} evenementId={ev.id} onSaved={() => { setEditingPrestation(null); load() }} onGoToStands={() => setEditingPrestation(null)} />}
     </>
   )
