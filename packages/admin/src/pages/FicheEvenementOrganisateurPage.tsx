@@ -1315,11 +1315,11 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
         </div>
       )}
 
-      {viewingPrestations && (
+      {viewingPrestations && !editingPrestation && (
         <StandPrestationsModal
           stand={viewingPrestations}
           onClose={() => setViewingPrestations(null)}
-          onEditPrestation={p => { setViewingPrestations(null); setEditingPrestation(p) }}
+          onEditPrestation={p => setEditingPrestation(p)}
         />
       )}
       {editingPrestation && (
