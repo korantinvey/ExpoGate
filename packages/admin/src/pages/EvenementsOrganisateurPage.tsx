@@ -97,7 +97,7 @@ export function EvenementsOrganisateurPage() {
                 </span>
                 {ev.statut === 'actif' && (
                   syncMap[ev.id]
-                    ? <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ Hors ligne</span>
+                    ? <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ Synchro OK</span>
                     : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>↓ Sync…</span>
                 )}
               </div>
