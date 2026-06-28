@@ -112,6 +112,10 @@ Deno.serve(async req => {
     user_ids: string[]; title: string; body: string; url?: string
   }
 
+  if (!title || !body) {
+    return Response.json({ error: 'title and body are required' }, { status: 400, headers: corsHeaders })
+  }
+
   const sbAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const { data: subs } = await sbAdmin.from('push_subscriptions').select('*').in('user_id', user_ids)
 
