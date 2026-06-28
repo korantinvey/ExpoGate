@@ -97,8 +97,8 @@ export function EvenementsOrganisateurPage() {
                 </span>
                 {ev.statut === 'actif' && (
                   syncMap[ev.id]
-                    ? <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ Synchro OK</span>
-                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>↓ Sync…</span>
+                    ? <span className="badge" style={{ background: 'var(--success-light)', color: 'var(--success)', fontSize: 11 }}>✓ Synchro OK</span>
+                    : <span className="badge" style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>↓ Sync…</span>
                 )}
               </div>
             </div>
