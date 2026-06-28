@@ -8,7 +8,7 @@ import { SettingsModal } from './SettingsModal'
 import { LogoExpogate } from './LogoExpogate'
 import { sb } from '../lib/supabase'
 
-function UserMenu({ userName }: { userName: string }) {
+function UserMenu({ userName, onSettings }: { userName: string; onSettings: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -26,7 +26,10 @@ function UserMenu({ userName }: { userName: string }) {
       {open && (
         <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', minWidth: 160, zIndex: 100 }}>
           <div style={{ padding: '8px 14px', fontSize: 13, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>{userName}</div>
-          <button onClick={() => sb.auth.signOut()} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+          <button onClick={() => { onSettings(); setOpen(false) }} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            Paramètres
+          </button>
+          <button onClick={() => sb.auth.signOut()} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--border)' }}>
             Déconnexion
           </button>
         </div>
@@ -48,8 +51,7 @@ export function LayoutOrganisateur() {
         <div style={{ flexShrink: 0, width: 110 }}><LogoExpogate height={28} /></div>
         <div className="topbar-user" style={{ marginLeft: 'auto', flexShrink: 0, gap: 6 }}>
           <NotifDropdown unread={unread} messages={messages} markAllRead={markAllRead} userName={userName} />
-          <button onClick={() => setSettingsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)', padding: '2px 4px' }} title="Paramètres">⚙️</button>
-          <UserMenu userName={userName} />
+          <UserMenu userName={userName} onSettings={() => setSettingsOpen(true)} />
         </div>
       </header>
       <main className="main-content">
