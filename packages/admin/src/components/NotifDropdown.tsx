@@ -38,18 +38,19 @@ export function NotifDropdown({ unread, messages, markAllRead }: Props) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={toggle}>
+      <button onClick={toggle} style={{ position: 'relative', background: 'none', border: '1px solid var(--border)', borderRadius: 20, cursor: 'pointer', padding: '4px 10px', fontSize: 18, color: 'var(--text)', display: 'flex', alignItems: 'center', lineHeight: 1 }}>
+        🔔
         {unread > 0 && (
           <span style={{
-            position: 'absolute', top: -4, right: -10,
+            position: 'absolute', top: 2, right: 2,
             background: '#e53e3e', color: 'white', borderRadius: '50%',
-            width: 16, height: 16, fontSize: 10,
+            width: 14, height: 14, fontSize: 9,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
             {unread > 9 ? '9+' : unread}
           </span>
         )}
-      </span>
+      </button>
 
       {open && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
