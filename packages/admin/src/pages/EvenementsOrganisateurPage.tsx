@@ -45,10 +45,10 @@ export function EvenementsOrganisateurPage() {
       const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
       setEvenements(liste)
 
-      // Téléchargement silencieux en arrière-plan des événements contrôleur actifs
+      // Téléchargement silencieux en arrière-plan de tous les événements actifs
       if (navigator.onLine) {
         liste
-          .filter(ev => ev.role_local === 'controleur' && ev.statut === 'actif')
+          .filter(ev => ev.statut === 'actif')
           .forEach(ev => { downloadEvent(ev.id).catch(() => {}) })
       }
     }
