@@ -4,6 +4,8 @@ import { db, type LocalEvenement, type LocalStand } from '../lib/db'
 import { downloadEvent, syncPending, getPendingCount } from '../lib/sync'
 import { fmtDate } from '../lib/format'
 
+const REFRESH_THRESHOLD_MS = 30 * 60 * 1000 // 30 min
+
 interface StandProgress extends LocalStand {
   total: number
   done: number
@@ -17,8 +19,11 @@ function standColor(s: StandProgress) {
   return 'var(--accent)'
 }
 
-function SyncBar({ pending, isOnline, syncing, onSync }: { pending: number; isOnline: boolean; syncing: boolean; onSync: () => void }) {
-  if (syncing) return <span style={{ fontSize: 12, color: 'var(--accent)' }}>⟳ Sync…</span>
+function HeaderRight({ pending, isOnline, syncing, downloading, onSync }: {
+  pending: number; isOnline: boolean; syncing: boolean; downloading: boolean; onSync: () => void
+}) {
+  if (downloading) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>↓ Mise à jour…</span>
+  if (syncing)     return <span style={{ fontSize: 12, color: 'var(--accent)' }}>⟳ Sync…</span>
   if (pending > 0) {
     return (
       <button
@@ -26,7 +31,7 @@ function SyncBar({ pending, isOnline, syncing, onSync }: { pending: number; isOn
         disabled={!isOnline}
         style={{ background: isOnline ? 'var(--accent)' : 'var(--border)', color: isOnline ? '#fff' : 'var(--text-muted)', border: 'none', borderRadius: 12, padding: '3px 10px', fontSize: 12, cursor: isOnline ? 'pointer' : 'default', fontWeight: 600 }}
       >
-        {isOnline ? `↑ ${pending} en attente` : `📵 ${pending} hors ligne`}
+        {isOnline ? `↑ ${pending}` : `📵 ${pending}`}
       </button>
     )
   }
@@ -44,7 +49,6 @@ export function ControleurEventPage() {
   const [pending, setPending] = useState(0)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [search, setSearch] = useState('')
-  const [error, setError] = useState('')
 
   const loadLocal = useCallback(async () => {
     if (!eventId) return
@@ -69,21 +73,40 @@ export function ControleurEventPage() {
     }
     setPending(await getPendingCount())
     setLoading(false)
+    return event
   }, [eventId])
+
+  const silentDownload = useCallback(async () => {
+    if (!eventId || !navigator.onLine || downloading) return
+    setDownloading(true)
+    try {
+      await downloadEvent(eventId)
+      await loadLocal()
+    } catch { /* silencieux */ } finally {
+      setDownloading(false)
+    }
+  }, [eventId, downloading, loadLocal])
 
   const triggerSync = useCallback(async () => {
     if (!navigator.onLine || syncing) return
     setSyncing(true)
-    try {
-      await syncPending()
-      await loadLocal()
-    } finally {
-      setSyncing(false)
-    }
+    try { await syncPending(); await loadLocal() } finally { setSyncing(false) }
   }, [syncing, loadLocal])
 
   useEffect(() => {
-    loadLocal()
+    async function init() {
+      if (!eventId) return
+      // Afficher les données locales immédiatement (0 latence)
+      const cached = await loadLocal()
+      // Télécharger en arrière-plan si en ligne et données absentes ou périmées
+      if (navigator.onLine) {
+        const stale = !cached?.downloaded_at ||
+          Date.now() - new Date(cached.downloaded_at).getTime() > REFRESH_THRESHOLD_MS
+        if (stale) await silentDownload()
+      }
+    }
+    init()
+
     const onOnline = () => { setIsOnline(true); triggerSync() }
     const onOffline = () => setIsOnline(false)
     window.addEventListener('online', onOnline)
@@ -93,20 +116,6 @@ export function ControleurEventPage() {
       window.removeEventListener('offline', onOffline)
     }
   }, [eventId])
-
-  async function handleDownload() {
-    if (!eventId) return
-    setDownloading(true)
-    setError('')
-    try {
-      await downloadEvent(eventId)
-      await loadLocal()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur réseau')
-    } finally {
-      setDownloading(false)
-    }
-  }
 
   const filtered = stands.filter(s =>
     !search ||
@@ -135,27 +144,38 @@ export function ControleurEventPage() {
       <div className="ctrl-header">
         <button className="ctrl-back" onClick={() => navigate('/')}>←</button>
         <span className="ctrl-title">{ev?.nom ?? 'Événement'}</span>
-        <SyncBar pending={pending} isOnline={isOnline} syncing={syncing} onSync={triggerSync} />
+        <HeaderRight
+          pending={pending}
+          isOnline={isOnline}
+          syncing={syncing}
+          downloading={downloading}
+          onSync={triggerSync}
+        />
       </div>
 
       <div className="ctrl-content">
-        {error && <div className="alert alert-error" style={{ margin: '12px 16px 0' }}>{error}</div>}
-
-        {!ev ? (
+        {/* Aucune donnée hors ligne */}
+        {!ev && !downloading && (
           <div style={{ padding: 32, textAlign: 'center' }}>
-            <div style={{ fontSize: 52, marginBottom: 16 }}>📥</div>
-            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>Pas encore téléchargé</div>
-            <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
-              Téléchargez cet événement maintenant pour y accéder hors ligne sur le terrain.
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📵</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Données non disponibles hors ligne</div>
+            <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Connectez-vous au réseau pour charger cet événement.
             </div>
-            <button className="btn btn-primary" onClick={handleDownload} disabled={downloading || !isOnline} style={{ minWidth: 200 }}>
-              {downloading ? 'Téléchargement…' : '↓ Télécharger pour le terrain'}
-            </button>
-            {!isOnline && <div style={{ fontSize: 13, color: 'var(--danger)', marginTop: 12 }}>Pas de connexion réseau.</div>}
           </div>
-        ) : (
+        )}
+
+        {/* Chargement initial */}
+        {!ev && downloading && (
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>⟳</div>
+            <div style={{ fontSize: 15 }}>Téléchargement en cours…</div>
+          </div>
+        )}
+
+        {/* Données disponibles */}
+        {ev && (
           <>
-            {/* Barre d'info */}
             <div style={{ padding: '12px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
               {ev.date_debut && (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
@@ -171,13 +191,7 @@ export function ControleurEventPage() {
                 </span>
               </div>
               <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%',
-                  background: globalPct === 100 ? 'var(--success)' : 'var(--accent)',
-                  borderRadius: 3,
-                  width: `${globalPct}%`,
-                  transition: 'width 0.4s ease',
-                }} />
+                <div style={{ height: '100%', background: globalPct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 3, width: `${globalPct}%`, transition: 'width 0.4s ease' }} />
               </div>
               <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
@@ -188,16 +202,15 @@ export function ControleurEventPage() {
                 />
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={handleDownload}
+                  onClick={silentDownload}
                   disabled={downloading || !isOnline}
-                  title="Rafraîchir depuis le serveur"
+                  title="Forcer la mise à jour"
                 >
                   {downloading ? '…' : '↻'}
                 </button>
               </div>
             </div>
 
-            {/* Liste des stands */}
             <div>
               {filtered.length === 0 ? (
                 <div className="empty-state">Aucun stand trouvé.</div>
@@ -205,29 +218,21 @@ export function ControleurEventPage() {
                 const color = standColor(s)
                 const pct = s.total ? Math.round((s.done / s.total) * 100) : 0
                 return (
-                  <div
-                    key={s.id}
-                    className="ctrl-stand-item"
-                    onClick={() => navigate(`/controleur/${eventId}/${s.id}`)}
-                  >
+                  <div key={s.id} className="ctrl-stand-item" onClick={() => navigate(`/controleur/${eventId}/${s.id}`)}>
                     <div className="ctrl-stand-color-bar" style={{ background: color }} />
                     <div className="ctrl-stand-body">
                       <div className="ctrl-stand-top">
                         <span className="ctrl-stand-numero">{s.numero}</span>
                         {s.hall && <span className="ctrl-stand-hall">{s.hall}</span>}
                       </div>
-                      {s.nom_exposant && (
-                        <div className="ctrl-stand-exposant">{s.nom_exposant}</div>
-                      )}
+                      {s.nom_exposant && <div className="ctrl-stand-exposant">{s.nom_exposant}</div>}
                       {s.total > 0 && (
                         <div className="ctrl-stand-prog">
                           <div className="ctrl-stand-prog-track">
                             <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.3s' }} />
                           </div>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>{s.done}/{s.total}</span>
-                          {s.issues > 0 && (
-                            <span style={{ fontSize: 12, color: '#f97316', flexShrink: 0, fontWeight: 600 }}>⚠ {s.issues}</span>
-                          )}
+                          {s.issues > 0 && <span style={{ fontSize: 12, color: '#f97316', flexShrink: 0, fontWeight: 600 }}>⚠ {s.issues}</span>}
                         </div>
                       )}
                     </div>

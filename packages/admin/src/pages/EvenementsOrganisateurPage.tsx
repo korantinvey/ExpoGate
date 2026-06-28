@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
+import { downloadEvent } from '../lib/sync'
 import type { Evenement, RoleLocal } from '../types'
 
 interface EvenementAvecRole extends Evenement {
@@ -41,7 +42,15 @@ export function EvenementsOrganisateurPage() {
 
       if (!evs) return
       const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
-      setEvenements(evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] })))
+      const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
+      setEvenements(liste)
+
+      // Téléchargement silencieux en arrière-plan des événements contrôleur actifs
+      if (navigator.onLine) {
+        liste
+          .filter(ev => ev.role_local === 'controleur' && ev.statut === 'actif')
+          .forEach(ev => { downloadEvent(ev.id).catch(() => {}) })
+      }
     }
     load()
   }, [user])
