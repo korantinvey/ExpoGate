@@ -12,6 +12,8 @@ import { UtilisateursPage } from './pages/UtilisateursPage'
 import { PrestatairesPage } from './pages/PrestatairesPage'
 import { EvenementsOrganisateurPage } from './pages/EvenementsOrganisateurPage'
 import { FicheEvenementOrganisateurPage } from './pages/FicheEvenementOrganisateurPage'
+import { ControleurEventPage } from './pages/ControleurEventPage'
+import { ControleurStandPage } from './pages/ControleurStandPage'
 import { sb } from './lib/supabase'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import { ThemeContext, useThemeProvider } from './hooks/useTheme'
@@ -90,6 +92,10 @@ function AppRoutes() {
   return (
     <>
       <Routes>
+        {/* Routes contrôleur terrain — sans sidebar */}
+        <Route path="controleur/:eventId" element={<ControleurEventPage />} />
+        <Route path="controleur/:eventId/:standId" element={<ControleurStandPage />} />
+        {/* Routes organisateur / prestataire */}
         <Route element={<LayoutOrganisateur />}>
           <Route index element={<EvenementsOrganisateurPage />} />
           <Route path="evenements/:id" element={<FicheEvenementOrganisateurPage />} />

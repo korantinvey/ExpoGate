@@ -9,6 +9,8 @@
   --accent: #1D9E75;
   --accent-light: #E1F5EE;
   --accent-dark: #0F6E56;
+  --success: #16a34a;
+  --success-light: #dcfce7;
   --danger: #E24B4A;
   --danger-light: #FCEBEB;
   --amber: #BA7517;
@@ -29,6 +31,8 @@
   --accent: #1D9E75;
   --accent-light: #0d2e22;
   --accent-dark: #2eca98;
+  --success: #22c55e;
+  --success-light: #052e16;
   --danger: #E24B4A;
   --danger-light: #2e1010;
   --amber: #F59E0B;
@@ -272,6 +276,211 @@ textarea { resize: vertical; min-height: 80px; }
 @media (hover: none) and (pointer: coarse) {
   .photo-input-desktop { display: none; }
   .photo-input-mobile  { display: flex; gap: 8px; }
+}
+
+/* ── Interface Contrôleur Terrain (offline-first) ────────────────────────── */
+.ctrl-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ctrl-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.ctrl-back {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--accent-dark);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  line-height: 1;
+  font-weight: 300;
+}
+.ctrl-back:hover { background: var(--bg); }
+
+.ctrl-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctrl-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Stand items */
+.ctrl-stand-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  min-height: 64px;
+  transition: background 0.12s;
+}
+.ctrl-stand-item:hover, .ctrl-stand-item:active { background: var(--bg); }
+
+.ctrl-stand-color-bar {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 0;
+}
+
+.ctrl-stand-body {
+  flex: 1;
+  padding: 12px 12px 10px;
+  min-width: 0;
+}
+
+.ctrl-stand-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.ctrl-stand-numero {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.ctrl-stand-hall {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.ctrl-stand-exposant {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctrl-stand-prog {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ctrl-stand-prog-track {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ctrl-stand-chevron {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 20px;
+  color: var(--border);
+  flex-shrink: 0;
+}
+
+/* Prestation list & cards */
+.ctrl-prest-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ctrl-prest-card {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.ctrl-prest-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  min-height: 60px;
+  transition: background 0.12s;
+}
+.ctrl-prest-header:hover { background: var(--bg); }
+.ctrl-prest-card.expanded .ctrl-prest-header { background: var(--bg); border-bottom: 1px solid var(--border); }
+
+.ctrl-prest-info { flex: 1; min-width: 0; }
+
+.ctrl-prest-libelle {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.ctrl-prest-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+/* Formulaire de contrôle inline */
+.ctrl-form {
+  padding: 16px;
+  background: var(--bg);
+}
+
+.ctrl-statut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ctrl-statut-btn {
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--btn-color, inherit);
+  background: var(--btn-bg, var(--surface));
+  transition: all 0.15s;
+  font-family: inherit;
+  text-align: center;
+}
+.ctrl-statut-btn:hover { opacity: 0.85; }
+.ctrl-statut-btn.active {
+  border-color: var(--btn-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--btn-color) 20%, transparent);
 }
 
 /* ── Vue prestataire : liste des stands ──────────────────────────────────── */

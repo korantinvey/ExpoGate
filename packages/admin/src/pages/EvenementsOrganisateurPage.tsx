@@ -15,6 +15,12 @@ const STATUT_LABEL: Record<string, string> = {
   termine: 'Terminé',
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  organisateur: 'Organisateur',
+  prestataire: 'Prestataire',
+  controleur: 'Contrôleur terrain',
+}
+
 export function EvenementsOrganisateurPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -52,7 +58,11 @@ export function EvenementsOrganisateurPage() {
       ) : (
         <div className="events-grid">
           {evenements.map(ev => (
-            <div key={ev.id} className="event-card" onClick={() => navigate(`/evenements/${ev.id}`)}>
+            <div
+              key={ev.id}
+              className="event-card"
+              onClick={() => navigate(ev.role_local === 'controleur' ? `/controleur/${ev.id}` : `/evenements/${ev.id}`)}
+            >
               <div className="event-card-header">
                 <div className="event-card-title">{ev.nom}</div>
                 <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
@@ -62,7 +72,9 @@ export function EvenementsOrganisateurPage() {
                 <span>📅 {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)}</span>
               </div>
               <div className="event-card-role">
-                {ev.role_local === 'organisateur' ? '👤 Organisateur' : '🏢 Prestataire'}
+                {ev.role_local === 'organisateur' ? '👤 ' : ev.role_local === 'controleur' ? '🔍 ' : '🏢 '}
+                {ROLE_LABEL[ev.role_local] ?? ev.role_local}
+                {ev.role_local === 'controleur' && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent-dark)', background: 'var(--accent-light)', padding: '1px 6px', borderRadius: 4 }}>Mode terrain →</span>}
               </div>
             </div>
           ))}
