@@ -6,6 +6,12 @@ interface Props {
   onSettings: () => void
 }
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
 export function UserMenu({ userName, onSettings }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -24,7 +30,7 @@ export function UserMenu({ userName, onSettings }: Props) {
         onClick={() => setOpen(o => !o)}
         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, cursor: 'pointer', padding: '4px 10px', fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        <span style={{ fontSize: 16 }}>👤</span>
+        <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{initials(userName)}</span>
         <span className="hide-on-mobile">{userName}</span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>▾</span>
       </button>
