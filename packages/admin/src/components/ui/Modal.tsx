@@ -4,13 +4,14 @@ import { Spinner } from './Spinner'
 interface Props {
   title: string
   confirmLabel?: string
+  confirmDisabled?: boolean
   onClose: () => void
   onConfirm: () => Promise<boolean>
   children: React.ReactNode
   footer?: React.ReactNode
 }
 
-export function Modal({ title, confirmLabel = 'Confirmer', onClose, onConfirm, children, footer }: Props) {
+export function Modal({ title, confirmLabel = 'Confirmer', confirmDisabled, onClose, onConfirm, children, footer }: Props) {
   const [loading, setLoading] = useState(false)
 
   async function handle() {
@@ -31,7 +32,7 @@ export function Modal({ title, confirmLabel = 'Confirmer', onClose, onConfirm, c
         <div className="modal-footer">
           {footer}
           <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" disabled={loading} onClick={handle}>
+          <button className="btn btn-primary" disabled={loading || confirmDisabled} onClick={handle}>
             {loading ? <Spinner /> : confirmLabel}
           </button>
         </div>
