@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useMessages } from '../hooks/useMessages'
 import { useTheme } from '../hooks/useTheme'
-import { NotifDropdown } from './NotifDropdown'
 import { SettingsModal } from './SettingsModal'
 import { UserMenu } from './UserMenu'
 import { LogoExpogate } from './LogoExpogate'
@@ -25,9 +24,14 @@ export function AppHeader({ onHamburger }: Props) {
           ? <button className="hamburger" onClick={onHamburger}>☰</button>
           : <div style={{ flexShrink: 0, width: 110 }}><LogoExpogate height={28} /></div>
         }
-        <div className="topbar-user" style={{ marginLeft: 'auto', flexShrink: 0, gap: 6 }}>
-          <NotifDropdown unread={unread} messages={messages} markAllRead={markAllRead} userName={userName} />
-          <UserMenu userName={userName} onSettings={() => setSettingsOpen(true)} />
+        <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          <UserMenu
+            userName={userName}
+            unread={unread}
+            messages={messages}
+            markAllRead={markAllRead}
+            onSettings={() => setSettingsOpen(true)}
+          />
         </div>
       </header>
       {settingsOpen && <SettingsModal theme={theme} onThemeChange={setTheme} onClose={() => setSettingsOpen(false)} />}
