@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
 import { downloadEvent } from '../lib/sync'
+import { db } from '../lib/db'
 import type { Evenement, RoleLocal } from '../types'
 
 interface EvenementAvecRole extends Evenement {
@@ -25,6 +26,14 @@ export function EvenementsOrganisateurPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [evenements, setEvenements] = useState<EvenementAvecRole[]>([])
+  const [syncMap, setSyncMap] = useState<Record<string, string | null>>({})
+
+  const refreshSyncMap = useCallback(async (ids: string[]) => {
+    const locals = await db.evenements.bulkGet(ids)
+    const map: Record<string, string | null> = {}
+    ids.forEach((id, i) => { map[id] = locals[i]?.downloaded_at ?? null })
+    setSyncMap(map)
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -44,15 +53,17 @@ export function EvenementsOrganisateurPage() {
       const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
       setEvenements(liste)
 
+      await refreshSyncMap(liste.map(ev => ev.id))
+
       // Téléchargement silencieux en arrière-plan de tous les événements actifs
       if (navigator.onLine) {
-        liste
-          .filter(ev => ev.statut === 'actif')
-          .forEach(ev => { downloadEvent(ev.id).catch(() => {}) })
+        const actifs = liste.filter(ev => ev.statut === 'actif')
+        await Promise.all(actifs.map(ev => downloadEvent(ev.id).catch(() => {})))
+        await refreshSyncMap(liste.map(ev => ev.id))
       }
     }
     load()
-  }, [user])
+  }, [user, refreshSyncMap])
 
   return (
     <div className="page">
@@ -80,8 +91,15 @@ export function EvenementsOrganisateurPage() {
                 <span>📅 {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)}</span>
               </div>
               <div className="event-card-role">
-                {ev.role_local === 'organisateur' ? '👤 ' : '🏢 '}
-                {ROLE_LABEL[ev.role_local] ?? ev.role_local}
+                <span>
+                  {ev.role_local === 'organisateur' ? '👤 ' : '🏢 '}
+                  {ROLE_LABEL[ev.role_local] ?? ev.role_local}
+                </span>
+                {ev.statut === 'actif' && (
+                  syncMap[ev.id]
+                    ? <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ Hors ligne</span>
+                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>↓ Sync…</span>
+                )}
               </div>
             </div>
           ))}
