@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User as SupaUser } from '@supabase/supabase-js'
 import { sb } from '../lib/supabase'
 import type { User } from '../types'
@@ -13,8 +13,10 @@ const AuthContext = createContext<AuthCtx>({ user: null, loading: true })
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<(SupaUser & User) | null>(null)
   const [loading, setLoading] = useState(true)
+  const lastSupaUser = useRef<SupaUser | null>(null)
 
   async function loadUser(supaUser: SupaUser) {
+    lastSupaUser.current = supaUser
     try {
       const { data: profile } = await sb.from('users').select('*').eq('id', supaUser.id).single()
       if (!profile) {
@@ -56,8 +58,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) void loadUser(session.user)
-      else { setUser(null); setLoading(false) }
+      if (session?.user) {
+        void loadUser(session.user)
+      } else if (!navigator.onLine && lastSupaUser.current) {
+        // Échec de rafraîchissement du token hors ligne : on garde la session en cache
+        void loadUser(lastSupaUser.current)
+      } else {
+        setUser(null)
+        setLoading(false)
+      }
     })
 
     return () => subscription.unsubscribe()
