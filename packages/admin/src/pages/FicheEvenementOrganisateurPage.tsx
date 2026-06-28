@@ -1368,7 +1368,11 @@ export function FicheEvenementOrganisateurPage() {
 
   async function load() {
     if (!user || !id) return
-    if (!navigator.onLine) {
+    const [{ data: evData, error: evErr }, { data: accesData }] = await Promise.all([
+      sb.from('evenements').select('*').eq('id', id).single(),
+      sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
+    ])
+    if (evErr) {
       const local = await db.evenements.get(id)
       if (local) {
         setEv(local as unknown as Evenement)
@@ -1376,10 +1380,6 @@ export function FicheEvenementOrganisateurPage() {
       }
       return
     }
-    const [{ data: evData }, { data: accesData }] = await Promise.all([
-      sb.from('evenements').select('*').eq('id', id).single(),
-      sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
-    ])
     setEv(evData ?? null)
     setRole((accesData?.role_local as RoleLocal) ?? null)
   }

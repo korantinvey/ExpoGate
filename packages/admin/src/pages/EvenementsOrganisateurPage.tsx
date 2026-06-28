@@ -37,26 +37,28 @@ export function EvenementsOrganisateurPage() {
 
   useEffect(() => {
     if (!user) return
-    async function load() {
-      if (!navigator.onLine) {
-        const localEvs = await db.evenements.filter(ev => !!ev.downloaded_at).toArray()
-        const liste = localEvs.map(ev => ({ ...ev, created_at: '', role_local: (ev.role_local ?? 'organisateur') as RoleLocal })) as EvenementAvecRole[]
-        setEvenements(liste)
-        await refreshSyncMap(liste.map(ev => ev.id))
-        return
-      }
+    async function loadFromCache() {
+      const localEvs = await db.evenements.filter(ev => !!ev.downloaded_at).toArray()
+      const liste = localEvs.map(ev => ({ ...ev, created_at: '', role_local: (ev.role_local ?? 'organisateur') as RoleLocal })) as EvenementAvecRole[]
+      setEvenements(liste)
+      await refreshSyncMap(liste.map(ev => ev.id))
+    }
 
-      const { data: acces } = await sb.from('user_evenements')
+    async function load() {
+      const { data: acces, error: accesErr } = await sb.from('user_evenements')
         .select('evenement_id, role_local')
         .eq('user_id', user!.id)
+
+      if (accesErr) { await loadFromCache(); return }
       if (!acces?.length) return
 
       const ids = acces.map(a => a.evenement_id)
-      const { data: evs } = await sb.from('evenements')
+      const { data: evs, error: evsErr } = await sb.from('evenements')
         .select('*')
         .in('id', ids)
 
-      if (!evs) return
+      if (evsErr || !evs) { await loadFromCache(); return }
+
       const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
       const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
       setEvenements(liste)
