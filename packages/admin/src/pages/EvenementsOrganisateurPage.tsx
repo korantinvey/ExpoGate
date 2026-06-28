@@ -88,8 +88,8 @@ export function EvenementsOrganisateurPage() {
                   <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
                   {ev.statut === 'actif' && (
                     syncMap[ev.id]
-                      ? <span className="badge" style={{ background: 'var(--success-light)', color: 'var(--success)', fontSize: 11 }}>✓ Synchro OK</span>
-                      : <span className="badge" style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>↓ Sync…</span>
+                      ? <span className="badge badge-actif">✓</span>
+                      : <span className="badge" style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>↓</span>
                   )}
                 </div>
               </div>
