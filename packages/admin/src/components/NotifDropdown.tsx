@@ -39,7 +39,6 @@ export function NotifDropdown({ unread, messages, markAllRead, userName }: Props
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={toggle}>
-        <span className="hide-on-mobile">{userName}</span>
         {unread > 0 && (
           <span style={{
             position: 'absolute', top: -4, right: -10,
