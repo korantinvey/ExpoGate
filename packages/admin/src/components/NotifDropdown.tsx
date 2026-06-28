@@ -8,7 +8,7 @@ interface Props {
   userName: string
 }
 
-export function NotifDropdown({ unread, messages, markAllRead, userName }: Props) {
+export function NotifDropdown({ unread, messages, markAllRead }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
