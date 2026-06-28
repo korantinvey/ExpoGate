@@ -1368,20 +1368,21 @@ export function FicheEvenementOrganisateurPage() {
 
   async function load() {
     if (!user || !id) return
-    const [{ data: evData, error: evErr }, { data: accesData }] = await Promise.all([
-      sb.from('evenements').select('*').eq('id', id).single(),
-      sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
-    ])
-    if (evErr) {
+    try {
+      const [{ data: evData, error: evErr }, { data: accesData }] = await Promise.all([
+        sb.from('evenements').select('*').eq('id', id).single(),
+        sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
+      ])
+      if (evErr) throw evErr
+      setEv(evData ?? null)
+      setRole((accesData?.role_local as RoleLocal) ?? null)
+    } catch {
       const local = await db.evenements.get(id)
       if (local) {
         setEv(local as unknown as Evenement)
         setRole((local.role_local as RoleLocal) ?? 'organisateur')
       }
-      return
     }
-    setEv(evData ?? null)
-    setRole((accesData?.role_local as RoleLocal) ?? null)
   }
 
   useEffect(() => { load() }, [id, user])

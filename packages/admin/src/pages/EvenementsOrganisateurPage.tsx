@@ -45,30 +45,34 @@ export function EvenementsOrganisateurPage() {
     }
 
     async function load() {
-      const { data: acces, error: accesErr } = await sb.from('user_evenements')
-        .select('evenement_id, role_local')
-        .eq('user_id', user!.id)
+      try {
+        const { data: acces, error: accesErr } = await sb.from('user_evenements')
+          .select('evenement_id, role_local')
+          .eq('user_id', user!.id)
 
-      if (accesErr) { await loadFromCache(); return }
-      if (!acces?.length) return
+        if (accesErr) throw accesErr
+        if (!acces?.length) return
 
-      const ids = acces.map(a => a.evenement_id)
-      const { data: evs, error: evsErr } = await sb.from('evenements')
-        .select('*')
-        .in('id', ids)
+        const ids = acces.map(a => a.evenement_id)
+        const { data: evs, error: evsErr } = await sb.from('evenements')
+          .select('*')
+          .in('id', ids)
 
-      if (evsErr || !evs) { await loadFromCache(); return }
+        if (evsErr || !evs) throw evsErr ?? new Error('no data')
 
-      const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
-      const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
-      setEvenements(liste)
+        const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
+        const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
+        setEvenements(liste)
 
-      await refreshSyncMap(liste.map(ev => ev.id))
+        await refreshSyncMap(liste.map(ev => ev.id))
 
-      // Téléchargement silencieux en arrière-plan de tous les événements actifs
-      const actifs = liste.filter(ev => ev.statut === 'actif')
-      await Promise.all(actifs.map(ev => downloadEvent(ev.id, roleMap[ev.id]).catch(() => {})))
-      await refreshSyncMap(liste.map(ev => ev.id))
+        // Téléchargement silencieux en arrière-plan de tous les événements actifs
+        const actifs = liste.filter(ev => ev.statut === 'actif')
+        await Promise.all(actifs.map(ev => downloadEvent(ev.id, roleMap[ev.id]).catch(() => {})))
+        await refreshSyncMap(liste.map(ev => ev.id))
+      } catch {
+        await loadFromCache()
+      }
     }
     load()
   }, [user, refreshSyncMap])
