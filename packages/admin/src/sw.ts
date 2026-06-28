@@ -6,6 +6,9 @@ declare const self: ServiceWorkerGlobalScope
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
+
 self.addEventListener('push', event => {
   const data = event.data ? Promise.resolve(event.data.json()).catch(() => ({})) : Promise.resolve({})
   event.waitUntil(
