@@ -218,10 +218,11 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
   async function load() {
-    const { data } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
-    if (data) {
-      setStands(data)
-    } else {
+    try {
+      const { data, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
+      if (error) throw error
+      setStands(data ?? [])
+    } catch {
       const local = await db.stands.where('evenement_id').equals(ev.id).toArray()
       setStands(local.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[])
     }
@@ -639,18 +640,20 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
   async function load() {
-    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
-    const standIds = (stands ?? []).map(s => s.id)
-    if (stands && !standIds.length) { setPrestations([]); return }
-    if (stands) {
-      const { data } = await sb.from('prestations')
+    try {
+      const { data: stands, error: standsErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
+      if (standsErr) throw standsErr
+      const standIds = (stands ?? []).map(s => s.id)
+      if (!standIds.length) { setPrestations([]); return }
+      const { data, error } = await sb.from('prestations')
         .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
         .in('stand_id', standIds)
         .order('libelle')
+      if (error) throw error
       setPrestations(data ?? [])
-    } else {
-      // Offline fallback
+    } catch {
       const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+      if (!localStands.length) { setPrestations([]); return }
       const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
       const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
       setPrestations(localPrests.map(p => ({
