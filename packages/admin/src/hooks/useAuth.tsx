@@ -15,12 +15,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   async function loadUser(supaUser: SupaUser) {
-    const { data: profile } = await sb.from('users').select('*').eq('id', supaUser.id).single()
-    if (!profile) {
-      await sb.auth.signOut()
-      setUser(null)
-    } else {
+    try {
+      const { data: profile } = await sb.from('users').select('*').eq('id', supaUser.id).single()
+      if (!profile) {
+        await sb.auth.signOut()
+        setUser(null)
+        setLoading(false)
+        return
+      }
+      // Mise en cache du profil pour le mode hors ligne
+      localStorage.setItem('cached_user_profile', JSON.stringify(profile))
       setUser({ ...supaUser, ...profile })
+    } catch {
+      // Hors ligne : on utilise le profil mis en cache
+      const cached = localStorage.getItem('cached_user_profile')
+      if (cached) {
+        try { setUser({ ...supaUser, ...JSON.parse(cached) }) } catch { setUser(null) }
+      } else {
+        setUser(null)
+      }
     }
     setLoading(false)
   }
@@ -28,14 +41,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     sb.auth.getSession().then(({ data: { session } }) => {
       if (!session) { setLoading(false); return }
-      // Refresh the token immediately if it expires within 5 minutes
+      // Refresh du token s'il expire dans moins de 5 minutes
       const expiresAt = session.expires_at ?? 0
       const fiveMinutes = 5 * 60
       if (expiresAt - Date.now() / 1000 < fiveMinutes) {
-        sb.auth.refreshSession().then(({ data: { session: refreshed } }) => {
-          if (refreshed?.user) void loadUser(refreshed.user)
-          else { setLoading(false) }
-        })
+        sb.auth.refreshSession()
+          .then(({ data: { session: refreshed } }) => {
+            void loadUser(refreshed?.user ?? session.user)
+          })
+          .catch(() => void loadUser(session.user)) // hors ligne : on continue avec la session courante
       } else {
         void loadUser(session.user)
       }

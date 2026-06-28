@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
+import { downloadEvent } from '../lib/sync'
 import type { Evenement, RoleLocal } from '../types'
 
 interface EvenementAvecRole extends Evenement {
@@ -13,6 +14,11 @@ const STATUT_LABEL: Record<string, string> = {
   parametrage: 'Paramétrage',
   actif: 'Actif',
   termine: 'Terminé',
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  organisateur: 'Organisateur',
+  prestataire: 'Prestataire',
 }
 
 export function EvenementsOrganisateurPage() {
@@ -35,7 +41,15 @@ export function EvenementsOrganisateurPage() {
 
       if (!evs) return
       const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
-      setEvenements(evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] })))
+      const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
+      setEvenements(liste)
+
+      // Téléchargement silencieux en arrière-plan de tous les événements actifs
+      if (navigator.onLine) {
+        liste
+          .filter(ev => ev.statut === 'actif')
+          .forEach(ev => { downloadEvent(ev.id).catch(() => {}) })
+      }
     }
     load()
   }, [user])
@@ -52,7 +66,11 @@ export function EvenementsOrganisateurPage() {
       ) : (
         <div className="events-grid">
           {evenements.map(ev => (
-            <div key={ev.id} className="event-card" onClick={() => navigate(`/evenements/${ev.id}`)}>
+            <div
+              key={ev.id}
+              className="event-card"
+              onClick={() => navigate(`/evenements/${ev.id}`)}
+            >
               <div className="event-card-header">
                 <div className="event-card-title">{ev.nom}</div>
                 <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
@@ -62,7 +80,8 @@ export function EvenementsOrganisateurPage() {
                 <span>📅 {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)}</span>
               </div>
               <div className="event-card-role">
-                {ev.role_local === 'organisateur' ? '👤 Organisateur' : '🏢 Prestataire'}
+                {ev.role_local === 'organisateur' ? '👤 ' : '🏢 '}
+                {ROLE_LABEL[ev.role_local] ?? ev.role_local}
               </div>
             </div>
           ))}
