@@ -1370,6 +1370,15 @@ export function FicheEvenementOrganisateurPage() {
             <div className="page-title">{ev.nom}</div>
             <div className="page-subtitle">{ev.lieu ?? '—'} · {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)} · <Badge statut={ev.statut} /></div>
           </div>
+          {role === 'organisateur' && ev.statut === 'actif' && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigate(`/controleur/${ev.id}`)}
+              style={{ flexShrink: 0, marginLeft: 12 }}
+            >
+              Mode terrain
+            </button>
+          )}
         </div>
       </div>
 

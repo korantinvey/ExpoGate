@@ -1,5 +1,5 @@
 export type EvenementStatut = 'parametrage' | 'actif' | 'termine'
-export type RoleLocal = 'organisateur' | 'prestataire' | 'controleur'
+export type RoleLocal = 'organisateur' | 'prestataire'
 export type ControleStatut = 'conforme' | 'non_conforme' | 'absent' | 'a_verifier'
 
 export interface Evenement {
