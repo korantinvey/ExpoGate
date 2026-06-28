@@ -116,12 +116,12 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
   return (
     <Modal title={`Notifier ${user.prenom} ${user.nom}`} confirmLabel={sending ? 'Envoi…' : 'Envoyer'} onClose={onClose} onConfirm={async () => { await send(); return true }}>
       <div className="form-group">
-        <label>Titre</label>
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Nouveau document disponible" />
+        <label>Titre <span style={{ color: '#e53e3e' }}>*</span></label>
+        <input required value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Nouveau document disponible" />
       </div>
       <div className="form-group">
-        <label>Message</label>
-        <textarea value={body} onChange={e => setBody(e.target.value)} rows={3} placeholder="Contenu de la notification…" />
+        <label>Message <span style={{ color: '#e53e3e' }}>*</span></label>
+        <textarea required value={body} onChange={e => setBody(e.target.value)} rows={3} placeholder="Contenu de la notification…" />
       </div>
     </Modal>
   )
