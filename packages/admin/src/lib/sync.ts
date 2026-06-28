@@ -2,7 +2,7 @@ import { sb, sbAdmin } from './supabase'
 import { db } from './db'
 import { compressImage } from './compressImage'
 
-export async function downloadEvent(eventId: string): Promise<void> {
+export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
   const [{ data: ev, error: evErr }, { data: stands, error: standsErr }] = await Promise.all([
     sb.from('evenements').select('id, nom, lieu, date_debut, date_fin, statut').eq('id', eventId).single(),
     sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).order('numero'),
@@ -18,7 +18,7 @@ export async function downloadEvent(eventId: string): Promise<void> {
     : { data: [] }
 
   await db.transaction('rw', [db.evenements, db.stands, db.prestations], async () => {
-    await db.evenements.put({ ...ev, downloaded_at: new Date().toISOString() })
+    await db.evenements.put({ ...ev, downloaded_at: new Date().toISOString(), role_local: role_local ?? null })
     await db.stands.bulkPut(stands)
     if (prestations?.length) {
       // Ne pas écraser les prestations avec des changements locaux non synchronisés

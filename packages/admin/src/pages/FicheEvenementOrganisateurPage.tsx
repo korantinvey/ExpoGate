@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sb, sbAdmin } from '../lib/supabase'
+import { db } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
 import { downloadTemplate } from '../lib/excel'
@@ -218,7 +219,12 @@ function TabStands({ ev }: { ev: Evenement }) {
 
   async function load() {
     const { data } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
-    setStands(data ?? [])
+    if (data) {
+      setStands(data)
+    } else {
+      const local = await db.stands.where('evenement_id').equals(ev.id).toArray()
+      setStands(local.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[])
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -635,12 +641,25 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   async function load() {
     const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
     const standIds = (stands ?? []).map(s => s.id)
-    if (!standIds.length) { setPrestations([]); return }
-    const { data } = await sb.from('prestations')
-      .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
-      .in('stand_id', standIds)
-      .order('libelle')
-    setPrestations(data ?? [])
+    if (stands && !standIds.length) { setPrestations([]); return }
+    if (stands) {
+      const { data } = await sb.from('prestations')
+        .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
+        .in('stand_id', standIds)
+        .order('libelle')
+      setPrestations(data ?? [])
+    } else {
+      // Offline fallback
+      const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+      const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
+      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      setPrestations(localPrests.map(p => ({
+        ...p,
+        stands: standMap[p.stand_id] ?? null,
+        prestataires: null,
+        users: null,
+      })) as unknown as Prestation[])
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -1349,6 +1368,14 @@ export function FicheEvenementOrganisateurPage() {
 
   async function load() {
     if (!user || !id) return
+    if (!navigator.onLine) {
+      const local = await db.evenements.get(id)
+      if (local) {
+        setEv(local as unknown as Evenement)
+        setRole((local.role_local as RoleLocal) ?? 'organisateur')
+      }
+      return
+    }
     const [{ data: evData }, { data: accesData }] = await Promise.all([
       sb.from('evenements').select('*').eq('id', id).single(),
       sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),

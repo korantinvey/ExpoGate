@@ -9,6 +9,7 @@ export interface LocalEvenement {
   date_fin: string
   statut: string
   downloaded_at: string | null
+  role_local?: string | null
 }
 
 export interface LocalStand {

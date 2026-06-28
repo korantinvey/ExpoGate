@@ -38,6 +38,14 @@ export function EvenementsOrganisateurPage() {
   useEffect(() => {
     if (!user) return
     async function load() {
+      if (!navigator.onLine) {
+        const localEvs = await db.evenements.filter(ev => !!ev.downloaded_at).toArray()
+        const liste = localEvs.map(ev => ({ ...ev, created_at: '', role_local: (ev.role_local ?? 'organisateur') as RoleLocal })) as EvenementAvecRole[]
+        setEvenements(liste)
+        await refreshSyncMap(liste.map(ev => ev.id))
+        return
+      }
+
       const { data: acces } = await sb.from('user_evenements')
         .select('evenement_id, role_local')
         .eq('user_id', user!.id)
@@ -56,11 +64,9 @@ export function EvenementsOrganisateurPage() {
       await refreshSyncMap(liste.map(ev => ev.id))
 
       // Téléchargement silencieux en arrière-plan de tous les événements actifs
-      if (navigator.onLine) {
-        const actifs = liste.filter(ev => ev.statut === 'actif')
-        await Promise.all(actifs.map(ev => downloadEvent(ev.id).catch(() => {})))
-        await refreshSyncMap(liste.map(ev => ev.id))
-      }
+      const actifs = liste.filter(ev => ev.statut === 'actif')
+      await Promise.all(actifs.map(ev => downloadEvent(ev.id, roleMap[ev.id]).catch(() => {})))
+      await refreshSyncMap(liste.map(ev => ev.id))
     }
     load()
   }, [user, refreshSyncMap])
