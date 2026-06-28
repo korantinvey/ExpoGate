@@ -84,22 +84,22 @@ export function EvenementsOrganisateurPage() {
             >
               <div className="event-card-header">
                 <div className="event-card-title">{ev.nom}</div>
-                <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
+                  {ev.statut === 'actif' && (
+                    syncMap[ev.id]
+                      ? <span className="badge" style={{ background: 'var(--success-light)', color: 'var(--success)', fontSize: 11 }}>✓ Synchro OK</span>
+                      : <span className="badge" style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>↓ Sync…</span>
+                  )}
+                </div>
               </div>
               <div className="event-card-meta">
                 {ev.lieu && <span>📍 {ev.lieu}</span>}
                 <span>📅 {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)}</span>
               </div>
               <div className="event-card-role">
-                <span>
-                  {ev.role_local === 'organisateur' ? '👤 ' : '🏢 '}
-                  {ROLE_LABEL[ev.role_local] ?? ev.role_local}
-                </span>
-                {ev.statut === 'actif' && (
-                  syncMap[ev.id]
-                    ? <span className="badge" style={{ background: 'var(--success-light)', color: 'var(--success)', fontSize: 11 }}>✓ Synchro OK</span>
-                    : <span className="badge" style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>↓ Sync…</span>
-                )}
+                {ev.role_local === 'organisateur' ? '👤 ' : '🏢 '}
+                {ROLE_LABEL[ev.role_local] ?? ev.role_local}
               </div>
             </div>
           ))}
