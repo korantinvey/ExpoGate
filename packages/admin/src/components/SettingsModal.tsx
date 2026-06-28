@@ -1,29 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { Theme } from '../hooks/useTheme'
 
 interface Props {
   theme: Theme
   onThemeChange: (t: Theme) => void
   onClose: () => void
+  notifPermission: NotificationPermission
+  notifSupported: boolean
+  onRequestNotif: () => Promise<void>
 }
 
-export function SettingsModal({ theme, onThemeChange, onClose }: Props) {
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default')
+export function SettingsModal({ theme, onThemeChange, onClose, notifPermission, notifSupported, onRequestNotif }: Props) {
   const [subscribing, setSubscribing] = useState(false)
-
-  useEffect(() => {
-    if ('Notification' in window) setNotifPermission(Notification.permission)
-  }, [])
 
   async function enableNotifications() {
     setSubscribing(true)
-    const result = await Notification.requestPermission()
-    setNotifPermission(result)
+    await onRequestNotif()
     setSubscribing(false)
   }
 
-  const notifLabel = notifPermission === 'granted' ? '✅ Activées' : notifPermission === 'denied' ? '🚫 Bloquées par le navigateur' : '⏳ Non activées'
-  const canRequest = notifPermission === 'default'
+  const notifLabel = !notifSupported ? '⚠️ Non supportées sur cet appareil' : notifPermission === 'granted' ? '✅ Activées' : notifPermission === 'denied' ? '🚫 Bloquées par le navigateur' : '⏳ Non activées'
+  const canRequest = notifSupported && notifPermission === 'default'
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>

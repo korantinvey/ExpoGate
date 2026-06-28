@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useMessages } from '../hooks/useMessages'
 import { useTheme } from '../hooks/useTheme'
+import { usePushNotifications } from '../hooks/usePushNotifications'
 import { SettingsModal } from './SettingsModal'
 import { UserMenu } from './UserMenu'
 import { LogoExpogate } from './LogoExpogate'
@@ -15,6 +16,7 @@ export function AppHeader({ onHamburger }: Props) {
   const { user } = useAuth()
   const { unread, messages, markAllRead } = useMessages(user?.id ?? null)
   const { theme, setTheme } = useTheme()
+  const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
   const userName = `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim()
 
   return (
@@ -34,7 +36,7 @@ export function AppHeader({ onHamburger }: Props) {
           />
         </div>
       </header>
-      {settingsOpen && <SettingsModal theme={theme} onThemeChange={setTheme} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal theme={theme} onThemeChange={setTheme} notifPermission={permission} notifSupported={supported} onRequestNotif={requestPermission} onClose={() => setSettingsOpen(false)} />}
     </>
   )
 }
