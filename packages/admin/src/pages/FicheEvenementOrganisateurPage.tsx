@@ -1241,7 +1241,7 @@ function TabDashboard({ ev }: { ev: Evenement }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div className="stats-grid">
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         {([
           {
             total: stats.nbStands, label: 'Stands',
@@ -1275,8 +1275,6 @@ function TabDashboard({ ev }: { ev: Evenement }) {
             </div>
           </div>
         ))}
-        <div className="stat-card"><div className="stat-value" style={{ color: stats.total > 0 ? 'var(--accent-dark)' : undefined }}>{stats.total > 0 ? `${pct(controlled)}%` : '—'}</div><div className="stat-label">Contrôlées</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{stats.conforme}</div><div className="stat-label">Conformes</div></div>
       </div>
 
       <div className="card">
