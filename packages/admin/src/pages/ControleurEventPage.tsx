@@ -49,6 +49,7 @@ export function ControleurEventPage() {
   const [pending, setPending] = useState(0)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [search, setSearch] = useState('')
+  const [sousOnglet, setSousOnglet] = useState<'a_valider' | 'valide' | 'tous'>('a_valider')
 
   const loadLocal = useCallback(async () => {
     if (!eventId) return
@@ -117,13 +118,20 @@ export function ControleurEventPage() {
     }
   }, [eventId])
 
-  const filtered = stands.filter(s =>
+  const isValide = (s: StandProgress) => s.total > 0 && s.done === s.total && s.issues === 0
+  const parOnglet = sousOnglet === 'tous' ? stands
+    : sousOnglet === 'valide' ? stands.filter(isValide)
+    : stands.filter(s => !isValide(s))
+
+  const filtered = parOnglet.filter(s =>
     !search ||
     s.numero.toLowerCase().includes(search.toLowerCase()) ||
     (s.nom_exposant ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (s.hall ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
+  const nbAValider = stands.filter(s => !isValide(s)).length
+  const nbValides = stands.filter(isValide).length
   const totalDone = stands.reduce((a, s) => a + s.done, 0)
   const totalPrests = stands.reduce((a, s) => a + s.total, 0)
   const globalPct = totalPrests ? Math.round((totalDone / totalPrests) * 100) : 0
@@ -192,6 +200,17 @@ export function ControleurEventPage() {
               </div>
               <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', background: globalPct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 3, width: `${globalPct}%`, transition: 'width 0.4s ease' }} />
+              </div>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', margin: '10px -16px 0', padding: '0 16px' }}>
+                {([
+                  { key: 'a_valider', label: 'À valider', count: nbAValider },
+                  { key: 'valide', label: 'Validés', count: nbValides },
+                  { key: 'tous', label: 'Tous', count: stands.length },
+                ] as const).map(({ key, label, count }) => (
+                  <button key={key} onClick={() => setSousOnglet(key)} style={{ flex: 1, padding: '8px 4px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: sousOnglet === key ? 600 : 400, color: sousOnglet === key ? 'var(--accent-dark)' : 'var(--text-muted)', borderBottom: sousOnglet === key ? '2px solid var(--accent-dark)' : '2px solid transparent', marginBottom: -1 }}>
+                    {label} <span style={{ fontSize: 11, background: 'var(--border)', borderRadius: 10, padding: '1px 6px' }}>{count}</span>
+                  </button>
+                ))}
               </div>
               <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input

@@ -217,26 +217,59 @@ function StandPrestationsModal({ stand, onClose, onEditPrestation }: { stand: St
   )
 }
 
+type StandAvecStatut = Stand & { _statut: 'valide' | 'a_valider' | 'sans_prestation' }
+function categoriserStand(stand: Stand, prestsByStand: Record<string, { statut_conformite: string | null }[]>): StandAvecStatut {
+  const prests = prestsByStand[stand.id] ?? []
+  if (prests.length === 0) return { ...stand, _statut: 'sans_prestation' }
+  return { ...stand, _statut: prests.every(p => p.statut_conformite === 'conforme') ? 'valide' : 'a_valider' }
+}
+
 function TabStands({ ev }: { ev: Evenement }) {
-  const [stands, setStands] = useState<Stand[]>([])
+  const [stands, setStands] = useState<StandAvecStatut[]>([])
   const [modal, setModal] = useState<Stand | null | 'new'>(null)
   const [viewingPrestations, setViewingPrestations] = useState<Stand | null>(null)
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
+  const [sousOnglet, setSousOnglet] = useState<'a_valider' | 'valide' | 'tous'>('a_valider')
 
   async function load() {
-    // Affiche les données locales immédiatement
-    const local = await db.stands.where('evenement_id').equals(ev.id).toArray()
-    if (local.length) setStands(local.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[])
-    // Rafraîchit depuis le réseau si disponible
+    // Cache-first
+    const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    if (localStands.length) {
+      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      const localPrestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
+      for (const p of localPrests) {
+        if (!localPrestsByStand[p.stand_id]) localPrestsByStand[p.stand_id] = []
+        localPrestsByStand[p.stand_id].push(p)
+      }
+      setStands(localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map(s => categoriserStand(s as unknown as Stand, localPrestsByStand)))
+    }
+    // Network refresh
     try {
-      const { data, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
-      if (!error && data) setStands(data)
+      const { data: standsData, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
+      if (error || !standsData) return
+      const standIds = standsData.map(s => s.id)
+      const prestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
+      if (standIds.length) {
+        const { data: prestsData } = await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds)
+        for (const row of prestsData ?? []) {
+          if (!prestsByStand[row.stand_id]) prestsByStand[row.stand_id] = []
+          prestsByStand[row.stand_id].push(row)
+        }
+      }
+      setStands(standsData.map(s => categoriserStand(s, prestsByStand)))
     } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [])
+
+  const standsFiltrés = sousOnglet === 'tous' ? stands
+    : sousOnglet === 'valide' ? stands.filter(s => s._statut === 'valide')
+    : stands.filter(s => s._statut !== 'valide')
+
+  const nbAValider = stands.filter(s => s._statut !== 'valide').length
+  const nbValides = stands.filter(s => s._statut === 'valide').length
 
   return (
     <>
@@ -249,20 +282,31 @@ function TabStands({ ev }: { ev: Evenement }) {
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Stand</button>
           </div>
         </div>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+          {([
+            { key: 'a_valider', label: 'À valider', count: nbAValider },
+            { key: 'valide', label: 'Validés', count: nbValides },
+            { key: 'tous', label: 'Tous', count: stands.length },
+          ] as const).map(({ key, label, count }) => (
+            <button key={key} onClick={() => setSousOnglet(key)} style={{ padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: sousOnglet === key ? 600 : 400, color: sousOnglet === key ? 'var(--accent-dark)' : 'var(--text-muted)', borderBottom: sousOnglet === key ? '2px solid var(--accent-dark)' : '2px solid transparent', marginBottom: -1 }}>
+              {label} <span style={{ marginLeft: 4, fontSize: 12, background: 'var(--border)', borderRadius: 10, padding: '1px 7px' }}>{count}</span>
+            </button>
+          ))}
+        </div>
         <div className="card-body">
           <DataTable
-            data={stands}
-            exportFilename={`stands-${ev.nom}`}
+            data={standsFiltrés}
+            exportFilename={`stands-${ev.nom}-${sousOnglet}`}
             onExportReady={fn => setExportFn(() => fn)}
             onRowClick={s => setModal(s)}
-            emptyState={<div className="empty-state">Aucun stand pour cet événement</div>}
+            emptyState={<div className="empty-state">{sousOnglet === 'a_valider' ? 'Tous les stands sont validés ✓' : sousOnglet === 'valide' ? 'Aucun stand validé pour l\'instant' : 'Aucun stand pour cet événement'}</div>}
             columns={[
-              { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: s => <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span> },
+              { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span> },
               { key: 'hall', label: 'Hall / Pavillon', sortable: true, filterable: true },
               { key: 'numero', label: 'N° de stand', sortable: true, filterable: true },
               { key: 'surface', label: 'Surface (m²)', sortable: true, hideOnMobile: true },
               { key: 'angles', label: 'Angles', sortable: true, hideOnMobile: true },
-              { key: 'prestations', label: '', render: s => (
+              { key: 'prestations', label: '', render: (s: StandAvecStatut) => (
                 <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setViewingPrestations(s) }}>
                   Prestations
                 </button>
