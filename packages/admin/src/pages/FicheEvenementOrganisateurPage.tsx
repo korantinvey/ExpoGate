@@ -308,6 +308,7 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
   const [commentairePrestataire, setCommentairePrestataire] = useState(prest?.commentaire_prestataire ?? '')
   const [photos, setPhotos] = useState<string[]>([])
   const [newPhotos, setNewPhotos] = useState<File[]>([])
+  const [newPhotoUrls, setNewPhotoUrls] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
 
@@ -330,6 +331,12 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
         .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url)))
     }
   }, [])
+
+  useEffect(() => {
+    const urls = newPhotos.map(f => URL.createObjectURL(f))
+    setNewPhotoUrls(urls)
+    return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
+  }, [newPhotos])
 
   if (stands.length === 0) {
     return (
@@ -550,9 +557,9 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
               ) : (
                 <input type="file" accept="image/*" multiple onChange={e => setNewPhotos(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
               )}
-              {newPhotos.length > 0 && (
+              {newPhotoUrls.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  {newPhotos.map((f, i) => <img key={i} src={URL.createObjectURL(f)} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '2px dashed var(--accent)' }} />)}
+                  {newPhotoUrls.map((url, i) => <img key={i} src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '2px dashed var(--accent)' }} />)}
                 </div>
               )}
               {photos.length > 0 && (
@@ -1160,14 +1167,118 @@ function TabPrestataires({ ev }: { ev: Evenement }) {
   )
 }
 
+// ── Onglet Tableau de bord (organisateur) ────────────────────────────────────
+function TabDashboard({ ev }: { ev: Evenement }) {
+  const [stats, setStats] = useState<{
+    nbStands: number; total: number
+    conforme: number; non_conforme: number; absent: number; a_verifier: number; non_controlees: number
+  } | null>(null)
+
+  useEffect(() => {
+    async function loadFromCache() {
+      const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      setStats({
+        nbStands: localStands.length,
+        total: localPrests.length,
+        conforme: localPrests.filter(p => p.statut_conformite === 'conforme').length,
+        non_conforme: localPrests.filter(p => p.statut_conformite === 'non_conforme').length,
+        absent: localPrests.filter(p => p.statut_conformite === 'absent').length,
+        a_verifier: localPrests.filter(p => p.statut_conformite === 'a_verifier').length,
+        non_controlees: localPrests.filter(p => !p.statut_conformite).length,
+      })
+    }
+    async function load() {
+      await loadFromCache()
+      try {
+        const { data: standsData, error: sErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
+        if (sErr) throw sErr
+        const standIds = (standsData ?? []).map(s => s.id)
+        if (!standIds.length) { setStats({ nbStands: 0, total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0, non_controlees: 0 }); return }
+        const { data: prests, error: pErr } = await sb.from('prestations').select('statut_conformite').in('stand_id', standIds)
+        if (pErr) throw pErr
+        const list = prests ?? []
+        setStats({
+          nbStands: standsData?.length ?? 0,
+          total: list.length,
+          conforme: list.filter(p => p.statut_conformite === 'conforme').length,
+          non_conforme: list.filter(p => p.statut_conformite === 'non_conforme').length,
+          absent: list.filter(p => p.statut_conformite === 'absent').length,
+          a_verifier: list.filter(p => p.statut_conformite === 'a_verifier').length,
+          non_controlees: list.filter(p => !p.statut_conformite).length,
+        })
+      } catch { /* données locales déjà affichées */ }
+    }
+    load()
+  }, [ev.id])
+
+  if (!stats) return <div className="empty-state">Chargement…</div>
+
+  const controlled = stats.conforme + stats.non_conforme + stats.absent + stats.a_verifier
+  const pct = (n: number) => stats.total > 0 ? Math.round(n / stats.total * 100) : 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-value">{stats.nbStands}</div><div className="stat-label">Stands</div></div>
+        <div className="stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Prestations</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ color: stats.total > 0 ? 'var(--accent-dark)' : undefined }}>{stats.total > 0 ? `${pct(controlled)}%` : '—'}</div><div className="stat-label">Contrôlées</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{stats.conforme}</div><div className="stat-label">Conformes</div></div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">Avancement du contrôle</div>
+          <span className="text-muted" style={{ fontSize: 13 }}>{controlled} / {stats.total} contrôlées</span>
+        </div>
+        <div className="card-body" style={{ padding: 24 }}>
+          {stats.total === 0 ? (
+            <div className="empty-state" style={{ padding: '16px 0' }}>Aucune prestation sur cet événement.</div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Progression globale</span>
+                  <strong>{pct(controlled)}%</strong>
+                </div>
+                <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct(controlled)}%`, background: 'var(--accent)', borderRadius: 4, transition: 'width 0.3s' }} />
+                </div>
+              </div>
+              {([
+                { label: 'Conformes', count: stats.conforme, color: 'var(--success)' },
+                { label: 'Non conformes', count: stats.non_conforme, color: '#f97316' },
+                { label: 'Absentes', count: stats.absent, color: 'var(--danger)' },
+                { label: 'À vérifier', count: stats.a_verifier, color: 'var(--text-muted)' },
+                { label: 'Non contrôlées', count: stats.non_controlees, color: 'var(--text-muted)' },
+              ] as const).map(({ label, count, color }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                  <span style={{ width: 130, fontSize: 13, color: 'var(--text)' }}>{label}</span>
+                  <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct(count)}%`, background: color, borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color, minWidth: 28, textAlign: 'right' }}>{count}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 38, textAlign: 'right' }}>{pct(count)}%</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Vue organisateur ──────────────────────────────────────────────────────────
-type Tab = 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
+type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
 
 export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () => void }) {
-  const [tab, setTab] = useState<Tab>('details')
+  const [tab, setTab] = useState<Tab>('dashboard')
   const [editing, setEditing] = useState(false)
 
   const TAB_LABELS: Record<Tab, string> = {
+    dashboard: 'Tableau de bord',
     details: 'Détails',
     stands: 'Stands',
     prestations: 'Prestations',
@@ -1185,6 +1296,7 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
         ))}
       </div>
 
+      {tab === 'dashboard' && <TabDashboard ev={ev} />}
       {tab === 'details' && <TabDetails ev={ev} onEdit={() => setEditing(true)} />}
       {tab === 'stands' && <TabStands ev={ev} />}
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}

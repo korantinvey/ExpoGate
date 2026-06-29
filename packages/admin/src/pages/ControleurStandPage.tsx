@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { db, type LocalPrestation } from '../lib/db'
@@ -36,11 +36,12 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
   const [saving, setSaving] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
-  // Génère les URLs de prévisualisation blob
-  const previewUrls = useRef<string[]>([])
+  // Génère les URLs de prévisualisation blob (state pour déclencher le re-render)
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
   useEffect(() => {
-    previewUrls.current = newPhotos.map(f => URL.createObjectURL(f))
-    return () => { previewUrls.current.forEach(u => URL.revokeObjectURL(u)) }
+    const urls = newPhotos.map(f => URL.createObjectURL(f))
+    setPreviewUrls(urls)
+    return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
   }, [newPhotos])
 
   useEffect(() => {
@@ -145,7 +146,7 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
           {newPhotos.map((_, i) => (
             <div key={i} style={{ position: 'relative', width: 72, height: 72 }}>
               <img
-                src={previewUrls.current[i]}
+                src={previewUrls[i]}
                 alt=""
                 style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '2px dashed var(--accent)' }}
               />
@@ -281,7 +282,7 @@ export function ControleurStandPage() {
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-  }, [standId])
+  }, [standId, loadData])
 
   async function triggerSync() {
     if (!navigator.onLine || syncing) return
