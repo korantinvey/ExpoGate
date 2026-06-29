@@ -45,6 +45,9 @@ export function EvenementsOrganisateurPage() {
     }
 
     async function load() {
+      // Affiche le cache immédiatement (0 latence perçue)
+      await loadFromCache()
+      if (!navigator.onLine) return
       try {
         const { data: acces, error: accesErr } = await sb.from('user_evenements')
           .select('evenement_id, role_local')
@@ -70,9 +73,7 @@ export function EvenementsOrganisateurPage() {
         const actifs = liste.filter(ev => ev.statut === 'actif')
         await Promise.all(actifs.map(ev => downloadEvent(ev.id, roleMap[ev.id]).catch(() => {})))
         await refreshSyncMap(liste.map(ev => ev.id))
-      } catch {
-        await loadFromCache()
-      }
+      } catch { /* cache déjà affiché */ }
     }
     load()
   }, [user, refreshSyncMap])

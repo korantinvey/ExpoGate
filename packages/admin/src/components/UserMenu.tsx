@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { sb } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
 import type { Message } from '../hooks/useMessages'
 
 interface Props {
@@ -48,6 +48,7 @@ export function UserMenu({ userName, unread, messages, markAllRead, onSettings }
   const [open, setOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const { signOut } = useAuth()
 
   useEffect(() => {
     // BroadcastChannel from service worker notificationclick
@@ -99,7 +100,7 @@ export function UserMenu({ userName, unread, messages, markAllRead, onSettings }
             <button onClick={() => { onSettings(); setOpen(false) }} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--border)' }}>
               Paramètres
             </button>
-            <button onClick={() => sb.auth.signOut()} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--border)' }}>
+            <button onClick={() => signOut()} style={{ width: '100%', padding: '10px 14px', fontSize: 13, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--border)' }}>
               Déconnexion
             </button>
           </div>
