@@ -218,14 +218,14 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
   async function load() {
+    // Affiche les données locales immédiatement
+    const local = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    if (local.length) setStands(local.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[])
+    // Rafraîchit depuis le réseau si disponible
     try {
       const { data, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
-      if (error) throw error
-      setStands(data ?? [])
-    } catch {
-      const local = await db.stands.where('evenement_id').equals(ev.id).toArray()
-      setStands(local.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[])
-    }
+      if (!error && data) setStands(data)
+    } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [])
@@ -639,7 +639,23 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
+  async function loadFromCache() {
+    const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    if (!localStands.length) return
+    const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
+    const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+    setPrestations(localPrests.map(p => ({
+      ...p,
+      stands: standMap[p.stand_id] ?? null,
+      prestataires: null,
+      users: null,
+    })) as unknown as Prestation[])
+  }
+
   async function load() {
+    // Affiche les données locales immédiatement
+    await loadFromCache()
+    // Rafraîchit depuis le réseau si disponible
     try {
       const { data: stands, error: standsErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
       if (standsErr) throw standsErr
@@ -649,20 +665,8 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
         .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
         .in('stand_id', standIds)
         .order('libelle')
-      if (error) throw error
-      setPrestations(data ?? [])
-    } catch {
-      const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
-      if (!localStands.length) { setPrestations([]); return }
-      const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
-      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
-      setPrestations(localPrests.map(p => ({
-        ...p,
-        stands: standMap[p.stand_id] ?? null,
-        prestataires: null,
-        users: null,
-      })) as unknown as Prestation[])
-    }
+      if (!error && data) setPrestations(data)
+    } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [])
