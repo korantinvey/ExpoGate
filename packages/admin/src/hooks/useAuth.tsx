@@ -18,7 +18,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function loadUser(supaUser: SupaUser) {
     lastSupaUser.current = supaUser
     try {
-      const { data: profile } = await sb.from('users').select('*').eq('id', supaUser.id).single()
+      const { data: profile, error } = await sb.from('users').select('*').eq('id', supaUser.id).single()
+      if (error) throw error  // erreur réseau ou Supabase → fallback cache
       if (!profile) {
         await sb.auth.signOut()
         setUser(null)
