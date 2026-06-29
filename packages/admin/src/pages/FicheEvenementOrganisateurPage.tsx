@@ -1172,9 +1172,23 @@ function TabDashboard({ ev }: { ev: Evenement }) {
   const [stats, setStats] = useState<{
     nbStands: number; total: number
     conforme: number; non_conforme: number; absent: number; a_verifier: number; non_controlees: number
+    standsConforme: number; standsAControler: number; standsNonConforme: number
   } | null>(null)
 
   useEffect(() => {
+    function classifyStands<S extends { id: string }, P extends { stand_id: string; statut_conformite: string | null }>(
+      stands: S[], prests: P[]
+    ) {
+      let standsConforme = 0, standsAControler = 0, standsNonConforme = 0
+      for (const stand of stands) {
+        const sp = prests.filter(p => p.stand_id === stand.id)
+        if (sp.some(p => p.statut_conformite === 'non_conforme' || p.statut_conformite === 'absent')) standsNonConforme++
+        else if (sp.length > 0 && sp.every(p => p.statut_conformite === 'conforme')) standsConforme++
+        else standsAControler++
+      }
+      return { standsConforme, standsAControler, standsNonConforme }
+    }
+
     async function loadFromCache() {
       const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
       const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
@@ -1186,26 +1200,34 @@ function TabDashboard({ ev }: { ev: Evenement }) {
         absent: localPrests.filter(p => p.statut_conformite === 'absent').length,
         a_verifier: localPrests.filter(p => p.statut_conformite === 'a_verifier').length,
         non_controlees: localPrests.filter(p => !p.statut_conformite).length,
+        ...classifyStands(localStands, localPrests),
       })
     }
     async function load() {
       await loadFromCache()
       try {
-        const { data: standsData, error: sErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
+        type RawStand = { id: string; prestations: { statut_conformite: string | null }[] }
+        const { data, error: sErr } = await sb.from('stands')
+          .select('id, prestations(statut_conformite)')
+          .eq('evenement_id', ev.id)
         if (sErr) throw sErr
-        const standIds = (standsData ?? []).map(s => s.id)
-        if (!standIds.length) { setStats({ nbStands: 0, total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0, non_controlees: 0 }); return }
-        const { data: prests, error: pErr } = await sb.from('prestations').select('statut_conformite').in('stand_id', standIds)
-        if (pErr) throw pErr
-        const list = prests ?? []
+        const stands = (data ?? []) as unknown as RawStand[]
+        if (!stands.length) {
+          setStats({ nbStands: 0, total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0, non_controlees: 0, standsConforme: 0, standsAControler: 0, standsNonConforme: 0 })
+          return
+        }
+        const list = stands.flatMap(s => s.prestations)
+        const standsWithId = stands.map(s => ({ id: s.id }))
+        const prestsWithStandId = stands.flatMap(s => s.prestations.map(p => ({ stand_id: s.id, statut_conformite: p.statut_conformite })))
         setStats({
-          nbStands: standsData?.length ?? 0,
+          nbStands: stands.length,
           total: list.length,
           conforme: list.filter(p => p.statut_conformite === 'conforme').length,
           non_conforme: list.filter(p => p.statut_conformite === 'non_conforme').length,
           absent: list.filter(p => p.statut_conformite === 'absent').length,
           a_verifier: list.filter(p => p.statut_conformite === 'a_verifier').length,
           non_controlees: list.filter(p => !p.statut_conformite).length,
+          ...classifyStands(standsWithId, prestsWithStandId),
         })
       } catch { /* données locales déjà affichées */ }
     }
@@ -1224,6 +1246,31 @@ function TabDashboard({ ev }: { ev: Evenement }) {
         <div className="stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Prestations</div></div>
         <div className="stat-card"><div className="stat-value" style={{ color: stats.total > 0 ? 'var(--accent-dark)' : undefined }}>{stats.total > 0 ? `${pct(controlled)}%` : '—'}</div><div className="stat-label">Contrôlées</div></div>
         <div className="stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{stats.conforme}</div><div className="stat-label">Conformes</div></div>
+      </div>
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px 16px', display: 'flex', alignItems: 'baseline', gap: 16, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 42, fontWeight: 800, lineHeight: 1, color: 'var(--text)' }}>{stats.nbStands}</div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Stands</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>au total</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex' }}>
+          {([
+            { label: 'Conformes', count: stats.standsConforme, color: 'var(--success)', bg: 'rgba(34,197,94,0.06)', border: 'rgba(34,197,94,0.2)' },
+            { label: 'À contrôler', count: stats.standsAControler, color: 'var(--text-muted)', bg: 'var(--bg)', border: 'var(--border)' },
+            { label: 'Non conformes', count: stats.standsNonConforme, color: '#f97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.2)' },
+          ] as const).map(({ label, count, color, bg, border }, i, arr) => (
+            <div key={label} style={{ flex: 1, background: bg, borderRight: i < arr.length - 1 ? `1px solid ${border}` : undefined, padding: '16px 20px' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color }}>{count}</div>
+              <div style={{ fontSize: 11, color, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.9 }}>{label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                {stats.nbStands > 0 ? Math.round(count / stats.nbStands * 100) : 0}%
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="card">
