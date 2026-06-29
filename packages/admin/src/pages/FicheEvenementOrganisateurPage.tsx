@@ -321,19 +321,36 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
   const [lightbox, setLightbox] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero'),
-      sb.from('prestataires').select('*').order('raison_sociale'),
-    ]).then(([{ data: s }, { data: p }]) => {
-      setStands(s ?? [])
-      setPrestataires(p ?? [])
-      if (!prest?.stand_id && s?.length) setStandId(s[0].id)
-      if (!prest?.prestataire_id && p?.length) setPrestaId(p[0].id)
-      if (prest?.stand_id) {
-        const found = (s ?? []).find(st => st.id === prest.stand_id)
-        if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+    async function loadForm() {
+      // Fallback IndexedDB pour les stands (mode hors ligne)
+      const localStands = await db.stands.where('evenement_id').equals(evenementId).toArray()
+      if (localStands.length) {
+        const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
+        setStands(s)
+        if (!prest?.stand_id) setStandId(s[0].id)
+        if (prest?.stand_id) {
+          const found = s.find(st => st.id === prest.stand_id)
+          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+        }
       }
-    })
+      try {
+        const [{ data: s }, { data: p }] = await Promise.all([
+          sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero'),
+          sb.from('prestataires').select('*').order('raison_sociale'),
+        ])
+        if (s) {
+          setStands(s)
+          if (!prest?.stand_id && s.length) setStandId(s[0].id)
+          if (!prest?.prestataire_id && p?.length) setPrestaId(p[0].id)
+          if (prest?.stand_id) {
+            const found = s.find(st => st.id === prest.stand_id)
+            if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+          }
+        }
+        if (p) setPrestataires(p)
+      } catch { /* données locales déjà affichées */ }
+    }
+    loadForm()
     if (prest?.id) {
       sbAdmin.from('photos').select('url').eq('prestation_id', prest.id).not('url', 'is', null)
         .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url)))
