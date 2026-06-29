@@ -114,7 +114,7 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
   }
 
   return (
-    <Modal title={`Notifier ${user.prenom} ${user.nom}`} confirmLabel={sending ? 'Envoi…' : 'Envoyer'} onClose={onClose} onConfirm={async () => { await send(); return true }}>
+    <Modal title={`Notifier ${user.prenom} ${user.nom}`} confirmLabel={sending ? 'Envoi…' : 'Envoyer'} confirmDisabled={!title.trim() || !body.trim()} onClose={onClose} onConfirm={async () => { await send(); return true }}>
       <div className="form-group">
         <label>Titre</label>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Nouveau document disponible" />

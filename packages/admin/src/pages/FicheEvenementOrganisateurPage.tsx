@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sb, sbAdmin } from '../lib/supabase'
+import { db } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
 import { downloadTemplate } from '../lib/excel'
@@ -301,6 +302,7 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
   const [commentairePrestataire, setCommentairePrestataire] = useState(prest?.commentaire_prestataire ?? '')
   const [photos, setPhotos] = useState<string[]>([])
   const [newPhotos, setNewPhotos] = useState<File[]>([])
+  const [newPhotoUrls, setNewPhotoUrls] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
 
@@ -323,6 +325,12 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
         .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url)))
     }
   }, [])
+
+  useEffect(() => {
+    const urls = newPhotos.map(f => URL.createObjectURL(f))
+    setNewPhotoUrls(urls)
+    return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
+  }, [newPhotos])
 
   if (stands.length === 0) {
     return (
@@ -543,9 +551,9 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
               ) : (
                 <input type="file" accept="image/*" multiple onChange={e => setNewPhotos(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
               )}
-              {newPhotos.length > 0 && (
+              {newPhotoUrls.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  {newPhotos.map((f, i) => <img key={i} src={URL.createObjectURL(f)} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '2px dashed var(--accent)' }} />)}
+                  {newPhotoUrls.map((url, i) => <img key={i} src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '2px dashed var(--accent)' }} />)}
                 </div>
               )}
               {photos.length > 0 && (
