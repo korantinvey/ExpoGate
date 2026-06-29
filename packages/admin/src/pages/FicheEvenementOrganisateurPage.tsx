@@ -1242,25 +1242,39 @@ function TabDashboard({ ev }: { ev: Evenement }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="stats-grid">
-        <div className="stat-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ marginBottom: 12 }}>
-            <div className="stat-value">{stats.nbStands}</div>
-            <div className="stat-label">Stands</div>
-          </div>
-          <div style={{ display: 'flex', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 'auto' }}>
-            {([
+        {([
+          {
+            total: stats.nbStands, label: 'Stands',
+            sub: [
               { label: 'Conf.', count: stats.standsConforme, color: 'var(--success)' },
               { label: 'À ctrl.', count: stats.standsAControler, color: 'var(--text-muted)' },
               { label: 'NC', count: stats.standsNonConforme, color: '#f97316' },
-            ] as const).map(({ label, count, color }, i, arr) => (
-              <div key={label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{count}</div>
-                <div style={{ fontSize: 9, color, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3, opacity: 0.85 }}>{label}</div>
-              </div>
-            ))}
+            ],
+          },
+          {
+            total: stats.total, label: 'Prestations',
+            sub: [
+              { label: 'Conf.', count: stats.conforme, color: 'var(--success)' },
+              { label: 'À vér.', count: stats.a_verifier, color: 'var(--text-muted)' },
+              { label: 'NC', count: stats.non_conforme + stats.absent, color: '#f97316' },
+            ],
+          },
+        ]).map(({ total, label, sub }) => (
+          <div key={label} className="stat-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <div className="stat-value">{total}</div>
+              <div className="stat-label">{label}</div>
+            </div>
+            <div style={{ display: 'flex', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              {sub.map(({ label: sl, count, color }, i, arr) => (
+                <div key={sl} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{count}</div>
+                  <div style={{ fontSize: 9, color, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3, opacity: 0.85 }}>{sl}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Prestations</div></div>
+        ))}
         <div className="stat-card"><div className="stat-value" style={{ color: stats.total > 0 ? 'var(--accent-dark)' : undefined }}>{stats.total > 0 ? `${pct(controlled)}%` : '—'}</div><div className="stat-label">Contrôlées</div></div>
         <div className="stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{stats.conforme}</div><div className="stat-label">Conformes</div></div>
       </div>
