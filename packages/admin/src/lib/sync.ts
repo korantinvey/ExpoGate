@@ -11,25 +11,30 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
 
   const standIds = stands.map(s => s.id)
-  const { data: prestations } = standIds.length
+  const { data: rawPrestations, error: prestsErr } = standIds.length
     ? await sb.from('prestations')
         .select('id, stand_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
         .in('stand_id', standIds)
-    : { data: [] }
+    : { data: [], error: null }
+  if (prestsErr) throw new Error(prestsErr.message)
+  const prestations = rawPrestations ?? []
 
   await db.transaction('rw', [db.evenements, db.stands, db.prestations], async () => {
     await db.evenements.put({ ...ev, downloaded_at: new Date().toISOString(), role_local: role_local ?? null })
     await db.stands.bulkPut(stands)
-    if (prestations?.length) {
-      // Ne pas écraser les prestations avec des changements locaux non synchronisés
-      const pendingIds = new Set(
-        await db.prestations.where('pending_sync').equals(1).primaryKeys()
-      )
-      const toWrite = prestations
-        .filter(p => !pendingIds.has(p.id))
-        .map(p => ({ ...p, pending_sync: 0 as const }))
-      await db.prestations.bulkPut(toWrite)
-    }
+    // Ne pas écraser les prestations avec des changements locaux non synchronisés
+    const pendingIds = new Set(
+      await db.prestations.where('pending_sync').equals(1).primaryKeys()
+    )
+    const toWrite = prestations
+      .filter(p => !pendingIds.has(p.id))
+      .map(p => ({ ...p, pending_sync: 0 as const }))
+    if (toWrite.length) await db.prestations.bulkPut(toWrite)
+    // Supprimer les prestations de cet événement qui n'existent plus sur le serveur
+    const serverIds = new Set(prestations.map(p => p.id))
+    const localIds = await db.prestations.where('stand_id').anyOf(standIds).primaryKeys() as string[]
+    const toDelete = localIds.filter(id => !serverIds.has(id) && !pendingIds.has(id))
+    if (toDelete.length) await db.prestations.bulkDelete(toDelete)
   })
 }
 

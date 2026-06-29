@@ -158,11 +158,19 @@ function StandPrestationsModal({ stand, onClose, onEditPrestation }: { stand: St
 
   useEffect(() => {
     if (stand.prestations) return
-    sb.from('prestations')
-      .select('*, prestataires(raison_sociale)')
-      .eq('stand_id', stand.id)
-      .order('libelle')
-      .then(({ data }) => setPrestations(data ?? []))
+    async function load() {
+      // Fallback IndexedDB si réseau indisponible
+      const local = await db.prestations.where('stand_id').equals(stand.id).toArray()
+      if (local.length) setPrestations(local as unknown as Prestation[])
+      try {
+        const { data } = await sb.from('prestations')
+          .select('*, prestataires(raison_sociale)')
+          .eq('stand_id', stand.id)
+          .order('libelle')
+        if (data) setPrestations(data)
+      } catch { /* données locales déjà affichées */ }
+    }
+    load()
   }, [stand.id])
 
   return (
