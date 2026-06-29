@@ -1236,14 +1236,138 @@ function TabPrestataires({ ev }: { ev: Evenement }) {
   )
 }
 
+// ── Onglet Tableau de bord (admin) ───────────────────────────────────────────
+function TabDashboard({ ev }: { ev: Evenement }) {
+  const [stats, setStats] = useState<{
+    nbStands: number; total: number
+    conforme: number; non_conforme: number; absent: number; a_verifier: number; non_controlees: number
+    standsConforme: number; standsAControler: number; standsNonConforme: number
+  } | null>(null)
+
+  useEffect(() => {
+    type RawStand = { id: string; prestations: { statut_conformite: string | null }[] }
+    sb.from('stands')
+      .select('id, prestations(statut_conformite)')
+      .eq('evenement_id', ev.id)
+      .then(({ data }) => {
+        if (!data) return
+        const stands = data as unknown as RawStand[]
+        let standsConforme = 0, standsAControler = 0, standsNonConforme = 0
+        for (const stand of stands) {
+          const p = stand.prestations
+          if (p.some(x => x.statut_conformite === 'non_conforme' || x.statut_conformite === 'absent')) standsNonConforme++
+          else if (p.length > 0 && p.every(x => x.statut_conformite === 'conforme')) standsConforme++
+          else standsAControler++
+        }
+        const list = stands.flatMap(s => s.prestations)
+        setStats({
+          nbStands: stands.length,
+          total: list.length,
+          conforme: list.filter(p => p.statut_conformite === 'conforme').length,
+          non_conforme: list.filter(p => p.statut_conformite === 'non_conforme').length,
+          absent: list.filter(p => p.statut_conformite === 'absent').length,
+          a_verifier: list.filter(p => p.statut_conformite === 'a_verifier').length,
+          non_controlees: list.filter(p => !p.statut_conformite).length,
+          standsConforme, standsAControler, standsNonConforme,
+        })
+      })
+  }, [ev.id])
+
+  if (!stats) return <div className="empty-state">Chargement…</div>
+
+  const controlled = stats.conforme + stats.non_conforme + stats.absent + stats.a_verifier
+  const pct = (n: number) => stats.total > 0 ? Math.round(n / stats.total * 100) : 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+        {([
+          {
+            total: stats.nbStands, label: 'Stands',
+            sub: [
+              { label: 'Conf.', count: stats.standsConforme, color: 'var(--success)' },
+              { label: 'À ctrl.', count: stats.standsAControler, color: 'var(--text-muted)' },
+              { label: 'NC', count: stats.standsNonConforme, color: '#f97316' },
+            ],
+          },
+          {
+            total: stats.total, label: 'Prestations',
+            sub: [
+              { label: 'Conf.', count: stats.conforme, color: 'var(--success)' },
+              { label: 'À vér.', count: stats.a_verifier, color: 'var(--text-muted)' },
+              { label: 'NC', count: stats.non_conforme + stats.absent, color: '#f97316' },
+            ],
+          },
+        ]).map(({ total, label, sub }) => (
+          <div key={label} className="stat-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <div className="stat-value">{total}</div>
+              <div className="stat-label">{label}</div>
+            </div>
+            <div style={{ display: 'flex', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              {sub.map(({ label: sl, count, color }, i, arr) => (
+                <div key={sl} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{count}</div>
+                  <div style={{ fontSize: 9, color, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3, opacity: 0.85 }}>{sl}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">Avancement du contrôle</div>
+          <span className="text-muted" style={{ fontSize: 13 }}>{controlled} / {stats.total} contrôlées</span>
+        </div>
+        <div className="card-body" style={{ padding: 24 }}>
+          {stats.total === 0 ? (
+            <div className="empty-state" style={{ padding: '16px 0' }}>Aucune prestation sur cet événement.</div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Progression globale</span>
+                  <strong>{pct(controlled)}%</strong>
+                </div>
+                <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct(controlled)}%`, background: 'var(--accent)', borderRadius: 4, transition: 'width 0.3s' }} />
+                </div>
+              </div>
+              {([
+                { label: 'Conformes', count: stats.conforme, color: 'var(--success)' },
+                { label: 'Non conformes', count: stats.non_conforme, color: '#f97316' },
+                { label: 'Absentes', count: stats.absent, color: 'var(--danger)' },
+                { label: 'À vérifier', count: stats.a_verifier, color: 'var(--text-muted)' },
+                { label: 'Non contrôlées', count: stats.non_controlees, color: 'var(--text-muted)' },
+              ] as const).map(({ label, count, color }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                  <span style={{ width: 130, fontSize: 13, color: 'var(--text)' }}>{label}</span>
+                  <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct(count)}%`, background: color, borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color, minWidth: 28, textAlign: 'right' }}>{count}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 38, textAlign: 'right' }}>{pct(count)}%</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Page principale FicheEvenement ────────────────────────────────────────────
-type Tab = 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
+type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
 
 export function FicheEvenementPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [ev, setEv] = useState<Evenement | null>(null)
-  const [tab, setTab] = useState<Tab>('details')
+  const [tab, setTab] = useState<Tab>('dashboard')
   const [editing, setEditing] = useState(false)
 
   async function load() {
@@ -1272,13 +1396,14 @@ export function FicheEvenementPage() {
       </div>
 
       <div className="tabs">
-        {(['details', 'stands', 'prestations', 'prestataires', 'utilisateurs'] as Tab[]).map(t => (
+        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs'] as Tab[]).map(t => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {{ details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs' }[t]}
+            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs' }[t]}
           </button>
         ))}
       </div>
 
+      {tab === 'dashboard' && <TabDashboard ev={ev} />}
       {tab === 'details' && <TabDetails ev={ev} />}
       {tab === 'stands' && <TabStands ev={ev} />}
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
