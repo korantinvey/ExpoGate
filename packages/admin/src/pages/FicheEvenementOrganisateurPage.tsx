@@ -1242,35 +1242,27 @@ function TabDashboard({ ev }: { ev: Evenement }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-value">{stats.nbStands}</div><div className="stat-label">Stands</div></div>
+        <div className="stat-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ marginBottom: 12 }}>
+            <div className="stat-value">{stats.nbStands}</div>
+            <div className="stat-label">Stands</div>
+          </div>
+          <div style={{ display: 'flex', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 'auto' }}>
+            {([
+              { label: 'Conf.', count: stats.standsConforme, color: 'var(--success)' },
+              { label: 'À ctrl.', count: stats.standsAControler, color: 'var(--text-muted)' },
+              { label: 'NC', count: stats.standsNonConforme, color: '#f97316' },
+            ] as const).map(({ label, count, color }, i, arr) => (
+              <div key={label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{count}</div>
+                <div style={{ fontSize: 9, color, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3, opacity: 0.85 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Prestations</div></div>
         <div className="stat-card"><div className="stat-value" style={{ color: stats.total > 0 ? 'var(--accent-dark)' : undefined }}>{stats.total > 0 ? `${pct(controlled)}%` : '—'}</div><div className="stat-label">Contrôlées</div></div>
         <div className="stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{stats.conforme}</div><div className="stat-label">Conformes</div></div>
-      </div>
-
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px 16px', display: 'flex', alignItems: 'baseline', gap: 16, borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 42, fontWeight: 800, lineHeight: 1, color: 'var(--text)' }}>{stats.nbStands}</div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>Stands</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>au total</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex' }}>
-          {([
-            { label: 'Conformes', count: stats.standsConforme, color: 'var(--success)', bg: 'rgba(34,197,94,0.06)', border: 'rgba(34,197,94,0.2)' },
-            { label: 'À contrôler', count: stats.standsAControler, color: 'var(--text-muted)', bg: 'var(--bg)', border: 'var(--border)' },
-            { label: 'Non conformes', count: stats.standsNonConforme, color: '#f97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.2)' },
-          ] as const).map(({ label, count, color, bg, border }, i, arr) => (
-            <div key={label} style={{ flex: 1, background: bg, borderRight: i < arr.length - 1 ? `1px solid ${border}` : undefined, padding: '16px 20px' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color }}>{count}</div>
-              <div style={{ fontSize: 11, color, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.9 }}>{label}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                {stats.nbStands > 0 ? Math.round(count / stats.nbStands * 100) : 0}%
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="card">
