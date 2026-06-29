@@ -77,14 +77,13 @@ export function UserMenu({ userName, unread, messages, markAllRead, onSettings }
       <div ref={ref} style={{ position: 'relative' }}>
         <button
           onClick={() => setOpen(o => !o)}
-          style={{ position: 'relative', background: 'none', border: '1px solid var(--border)', borderRadius: 20, cursor: 'pointer', padding: '4px 10px', fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ position: 'relative', background: 'none', border: 'none', borderRadius: '50%', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+          <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
             {initials(userName)}
           </span>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>▾</span>
           {unread > 0 && (
-            <span style={{ position: 'absolute', top: 2, right: 2, background: '#e53e3e', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+            <span style={{ position: 'absolute', top: -3, right: -3, background: '#e53e3e', color: '#fff', borderRadius: '50%', minWidth: 16, height: 16, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, padding: '0 3px', boxSizing: 'border-box' }}>
               {unread > 9 ? '9+' : unread}
             </span>
           )}
