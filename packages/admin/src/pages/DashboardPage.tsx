@@ -30,6 +30,7 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [stats, setStats] = useState({ actifs: '—', users: '—', prestataires: '—', stands: '—' })
   const [conformite, setConformite] = useState({ total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0 })
+  const [standStats, setStandStats] = useState<{ total: number; conforme: number; a_controler: number; non_conforme: number } | null>(null)
   const [evStats, setEvStats] = useState<EvStat[]>([])
   const [events, setEvents] = useState<Evenement[]>([])
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
@@ -64,6 +65,20 @@ export function DashboardPage() {
         a_verifier: av.count ?? 0,
       })
     })
+
+    type RawStand = { id: string; prestations: { statut_conformite: string | null }[] }
+    sb.from('stands').select('id, prestations(statut_conformite)')
+      .then(({ data }) => {
+        if (!data) return
+        let conforme = 0, a_controler = 0, non_conforme = 0
+        for (const stand of data as unknown as RawStand[]) {
+          const p = stand.prestations
+          if (p.some(x => x.statut_conformite === 'non_conforme' || x.statut_conformite === 'absent')) non_conforme++
+          else if (p.length > 0 && p.every(x => x.statut_conformite === 'conforme')) conforme++
+          else a_controler++
+        }
+        setStandStats({ total: (data as unknown as RawStand[]).length, conforme, a_controler, non_conforme })
+      })
 
     type RawEv = { id: string; nom: string; stands: { prestations: { statut_conformite: string | null }[] }[] }
     sb.from('evenements')
@@ -105,6 +120,33 @@ export function DashboardPage() {
         <div className="stat-card"><div className="stat-value">{stats.prestataires}</div><div className="stat-label">Prestataires</div></div>
         <div className="stat-card"><div className="stat-value">{stats.stands}</div><div className="stat-label">Stands total</div></div>
       </div>
+
+      {standStats && (
+        <div className="card" style={{ borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+          <div style={{ padding: '20px 24px 16px', display: 'flex', alignItems: 'baseline', gap: 16, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, lineHeight: 1, color: 'var(--text)' }}>{standStats.total}</div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Stands</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>au total</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex' }}>
+            {([
+              { label: 'Conformes', count: standStats.conforme, color: 'var(--success)', bg: 'rgba(34,197,94,0.06)', border: 'rgba(34,197,94,0.2)' },
+              { label: 'À contrôler', count: standStats.a_controler, color: 'var(--text-muted)', bg: 'var(--bg)', border: 'var(--border)' },
+              { label: 'Non conformes', count: standStats.non_conforme, color: '#f97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.2)' },
+            ] as const).map(({ label, count, color, bg, border }, i, arr) => (
+              <div key={label} style={{ flex: 1, background: bg, borderRight: i < arr.length - 1 ? `1px solid ${border}` : undefined, padding: '16px 20px' }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color }}>{count}</div>
+                <div style={{ fontSize: 11, color, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.9 }}>{label}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {standStats.total > 0 ? Math.round(count / standStats.total * 100) : 0}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {conformite.total > 0 && (
         <div className="card">
