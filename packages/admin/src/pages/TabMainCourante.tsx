@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { sb, sbAdmin } from '../lib/supabase'
+import { db } from '../lib/db'
+import type { LocalStand } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -7,7 +9,7 @@ import { DataTable } from '../components/ui/DataTable'
 import { ExportButton } from '../components/ui/ExportButton'
 import { compressImage } from '../lib/compressImage'
 import { useToast } from '../components/ui/Toast'
-import type { Evenement, Stand, MainCourante } from '../types'
+import type { Evenement, MainCourante } from '../types'
 
 function fmtDateHeure(s: string) {
   return new Date(s).toLocaleDateString('fr-FR', {
@@ -20,7 +22,7 @@ function fmtDateHeure(s: string) {
 
 function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; evenementId: string; onSaved: () => void }) {
   const { user } = useAuth()
-  const [stands, setStands] = useState<Stand[]>([])
+  const [stands, setStands] = useState<LocalStand[]>([])
   const [standId, setStandId] = useState(mc?.stand_id ?? '')
   const [standSearch, setStandSearch] = useState('')
   const [titre, setTitre] = useState(mc?.titre ?? '')
@@ -33,9 +35,8 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
   const [lightbox, setLightbox] = useState<string | null>(null)
 
   useEffect(() => {
-    sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero')
-      .then(({ data }) => {
-        if (!data) return
+    db.stands.where('evenement_id').equals(evenementId).sortBy('numero')
+      .then(data => {
         setStands(data)
         if (mc?.stand_id) {
           const found = data.find(s => s.id === mc.stand_id)
@@ -61,6 +62,44 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
     try {
       if (!titre.trim()) { setError('Le titre est obligatoire.'); return false }
 
+      const isOffline = !navigator.onLine
+      const now = new Date().toISOString()
+
+      if (isOffline) {
+        const savedId = mc?.id ?? crypto.randomUUID()
+        if (mc) {
+          await db.main_courante.update(mc.id, {
+            stand_id: standId || null,
+            titre: titre.trim(),
+            descriptif: descriptif.trim() || null,
+            pending_sync: 1,
+          })
+        } else {
+          await db.main_courante.put({
+            id: savedId,
+            evenement_id: evenementId,
+            stand_id: standId || null,
+            titre: titre.trim(),
+            descriptif: descriptif.trim() || null,
+            created_at: now,
+            created_by: user?.id ?? null,
+            pending_sync: 1,
+          })
+        }
+        for (const file of newPhotos) {
+          await db.mc_photos.add({
+            main_courante_id: savedId,
+            blob: file,
+            created_at: now,
+            synced: 0,
+            remote_url: null,
+          })
+        }
+        onSaved()
+        return true
+      }
+
+      // Chemin online
       let savedId = mc?.id
       if (mc) {
         const { error } = await sb.from('main_courante').update({
@@ -240,25 +279,66 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
   const { notify, toastEl } = useToast()
 
   async function load() {
+    // Affichage immédiat depuis IndexedDB
+    const [localMcs, localStands] = await Promise.all([
+      db.main_courante.where('evenement_id').equals(ev.id).toArray(),
+      db.stands.where('evenement_id').equals(ev.id).toArray(),
+    ])
+    const standMap = new Map(localStands.map(s => [s.id, s]))
+    if (localMcs.length) {
+      setEntries(
+        localMcs
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map(mc => ({
+            ...mc,
+            stands: mc.stand_id ? (standMap.get(mc.stand_id) ?? null) : null,
+            users: null,
+            photos: [],
+          })) as MainCourante[]
+      )
+    }
+
+    if (!navigator.onLine) return
+
+    // Rafraîchissement depuis le serveur
     const { data, error } = await sb.from('main_courante')
       .select('*, stands(numero, nom_exposant), users(nom, prenom), main_courante_photos(id, url)')
       .eq('evenement_id', ev.id)
       .order('created_at', { ascending: false })
     if (error) { notify(error.message, 'error'); return }
-    setEntries(
-      (data ?? []).map(e => ({
-        ...e,
-        photos: (e.main_courante_photos as { id: string; url: string }[]) ?? [],
-      })) as MainCourante[]
+    const mapped = (data ?? []).map(e => ({
+      ...e,
+      photos: (e.main_courante_photos as { id: string; url: string }[]) ?? [],
+    })) as MainCourante[]
+    setEntries(mapped)
+
+    // Mise à jour du cache IndexedDB (sans écraser les pending)
+    const pendingIds = new Set(
+      await db.main_courante.where('pending_sync').equals(1).primaryKeys()
     )
+    const toCache = mapped
+      .filter(mc => !pendingIds.has(mc.id))
+      .map(mc => ({
+        id: mc.id,
+        evenement_id: mc.evenement_id,
+        stand_id: mc.stand_id,
+        titre: mc.titre,
+        descriptif: mc.descriptif,
+        created_at: mc.created_at,
+        created_by: mc.created_by,
+        pending_sync: 0 as const,
+      }))
+    if (toCache.length) await db.main_courante.bulkPut(toCache)
   }
 
   useEffect(() => { load() }, [ev.id])
 
   async function deleteEntry(mc: MainCourante) {
     if (!confirm(`Supprimer "${mc.titre}" ?`)) return
+    if (!navigator.onLine) { notify('Suppression non disponible hors ligne.', 'error'); return }
     const { error } = await sb.from('main_courante').delete().eq('id', mc.id)
     if (error) { notify(error.message, 'error'); return }
+    await db.main_courante.delete(mc.id)
     await load()
   }
 
