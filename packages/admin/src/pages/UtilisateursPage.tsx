@@ -127,22 +127,63 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
   )
 }
 
+function parseUA(ua: string | null): { device: string; os: string; browser: string } {
+  if (!ua) return { device: 'Appareil inconnu', os: '', browser: '' }
+
+  // Device / OS
+  let device = ''
+  let os = ''
+  const androidMatch = ua.match(/Android ([\d.]+);?\s*([^)]+)?/)
+  const iosMatch = ua.match(/\(iPhone[^)]*OS ([\d_]+)/)
+  const ipadMatch = ua.match(/\(iPad[^)]*OS ([\d_]+)/)
+
+  if (androidMatch) {
+    os = `Android ${androidMatch[1]}`
+    const model = androidMatch[2]?.trim().replace(/Build.*/, '').trim()
+    device = model && model !== 'wv' ? model : 'Android'
+  } else if (iosMatch) {
+    os = `iOS ${iosMatch[1].replace(/_/g, '.')}`
+    device = 'iPhone'
+  } else if (ipadMatch) {
+    os = `iPadOS ${ipadMatch[1].replace(/_/g, '.')}`
+    device = 'iPad'
+  } else if (/Windows NT/.test(ua)) {
+    const v = ua.match(/Windows NT ([\d.]+)/)?.[1]
+    const winVersion: Record<string, string> = { '10.0': '10/11', '6.3': '8.1', '6.2': '8', '6.1': '7' }
+    os = `Windows ${winVersion[v ?? ''] ?? v ?? ''}`
+    device = 'PC'
+  } else if (/Macintosh/.test(ua)) {
+    os = 'macOS'
+    device = 'Mac'
+  } else {
+    device = 'Appareil'
+  }
+
+  // Browser
+  let browser = ''
+  if (/Edg\//.test(ua)) {
+    browser = `Edge ${ua.match(/Edg\/([\d]+)/)?.[1] ?? ''}`
+  } else if (/OPR\/|Opera/.test(ua)) {
+    browser = `Opera`
+  } else if (/Firefox\/([\d]+)/.test(ua)) {
+    browser = `Firefox ${ua.match(/Firefox\/([\d]+)/)?.[1] ?? ''}`
+  } else if (/Chrome\/([\d]+)/.test(ua)) {
+    browser = `Chrome ${ua.match(/Chrome\/([\d]+)/)?.[1] ?? ''}`
+  } else if (/Version\/([\d]+).*Safari/.test(ua)) {
+    browser = `Safari ${ua.match(/Version\/([\d]+)/)?.[1] ?? ''}`
+  }
+
+  return { device, os, browser }
+}
+
 function DevicesModal({ user, onClose, notify }: { user: User; onClose: () => void; notify: (msg: string, type?: 'success' | 'error') => void }) {
-  const [subs, setSubs] = useState<{ endpoint: string; created_at: string }[]>([])
+  const [subs, setSubs] = useState<{ endpoint: string; created_at: string; user_agent: string | null }[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    sbAdmin.from('push_subscriptions').select('endpoint, created_at').eq('user_id', user.id).order('created_at', { ascending: false })
+    sbAdmin.from('push_subscriptions').select('endpoint, created_at, user_agent').eq('user_id', user.id).order('created_at', { ascending: false })
       .then(({ data }) => { setSubs(data ?? []); setLoading(false) })
   }, [user.id])
-
-  function browserLabel(endpoint: string) {
-    if (/googleapis|fcm/.test(endpoint)) return 'Chrome / Android'
-    if (/mozilla|firefox/.test(endpoint)) return 'Firefox'
-    if (/apple/.test(endpoint)) return 'Safari'
-    if (/microsoft|edge/.test(endpoint)) return 'Edge'
-    return 'Navigateur'
-  }
 
   async function revoke(endpoint: string) {
     const { error } = await sbAdmin.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', endpoint)
@@ -159,18 +200,23 @@ function DevicesModal({ user, onClose, notify }: { user: User; onClose: () => vo
         <div className="text-muted">Aucun appareil push enregistré pour cet utilisateur.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {subs.map(s => (
-            <div key={s.endpoint} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, gap: 12 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{browserLabel(s.endpoint)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  Enregistré le {new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {subs.map(s => {
+            const { device, os, browser } = parseUA(s.user_agent)
+            return (
+              <div key={s.endpoint} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{device}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {[os, browser].filter(Boolean).join(' · ')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Enregistré le {new Date(s.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{s.endpoint}</div>
+                <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => revoke(s.endpoint)}>Révoquer</button>
               </div>
-              <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => revoke(s.endpoint)}>Révoquer</button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </Modal>
