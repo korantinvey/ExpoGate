@@ -233,6 +233,7 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const [sousOnglet, setSousOnglet] = useState<'a_valider' | 'valide' | 'tous'>('a_valider')
+  const [pendingStandIds, setPendingStandIds] = useState<Set<string>>(new Set())
 
   async function load() {
     // Cache-first
@@ -244,6 +245,7 @@ function TabStands({ ev }: { ev: Evenement }) {
         if (!localPrestsByStand[p.stand_id]) localPrestsByStand[p.stand_id] = []
         localPrestsByStand[p.stand_id].push(p)
       }
+      setPendingStandIds(new Set(localPrests.filter(p => p.pending_sync === 1).map(p => p.stand_id)))
       setStands(localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map(s => categoriserStand(s as unknown as Stand, localPrestsByStand)))
     }
     // Network refresh
@@ -258,6 +260,8 @@ function TabStands({ ev }: { ev: Evenement }) {
           if (!prestsByStand[row.stand_id]) prestsByStand[row.stand_id] = []
           prestsByStand[row.stand_id].push(row)
         }
+        const pendingLocal = await db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray()
+        setPendingStandIds(new Set(pendingLocal.map(p => p.stand_id)))
       }
       setStands(standsData.map(s => categoriserStand(s, prestsByStand)))
     } catch { /* données locales déjà affichées */ }
@@ -302,7 +306,12 @@ function TabStands({ ev }: { ev: Evenement }) {
             onRowClick={s => setModal(s)}
             emptyState={<div className="empty-state">{sousOnglet === 'a_valider' ? 'Tous les stands sont validés ✓' : sousOnglet === 'valide' ? 'Aucun stand validé pour l\'instant' : 'Aucun stand pour cet événement'}</div>}
             columns={[
-              { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span> },
+              { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span title={pendingStandIds.has(s.id) ? 'Modifications en attente de sync' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingStandIds.has(s.id) ? '#f97316' : '#22c55e' }} />
+                  <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span>
+                </span>
+              )},
               { key: 'hall', label: 'Hall / Pavillon', sortable: true, filterable: true },
               { key: 'numero', label: 'N° de stand', sortable: true, filterable: true },
               { key: 'surface', label: 'Surface (m²)', sortable: true, hideOnMobile: true },
@@ -744,12 +753,14 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [modal, setModal] = useState<Prestation | null | 'new'>(null)
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set())
 
   async function loadFromCache() {
     const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
     if (!localStands.length) return
     const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
     const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+    setPendingSyncIds(new Set(localPrests.filter(p => p.pending_sync === 1).map(p => p.id)))
     setPrestations(localPrests.map(p => ({
       ...p,
       stands: standMap[p.stand_id] ?? null,
@@ -771,7 +782,11 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
         .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
         .in('stand_id', standIds)
         .order('libelle')
-      if (!error && data) setPrestations(data)
+      if (!error && data) {
+        setPrestations(data)
+        const pending = await db.prestations.where('id').anyOf(data.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
+        setPendingSyncIds(new Set(pending.map(p => p.id)))
+      }
     } catch { /* données locales déjà affichées */ }
   }
 
@@ -798,7 +813,12 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
             emptyState={<div className="empty-state">Aucune prestation pour cet événement</div>}
             columns={[
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
-              { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => <span style={{ fontWeight: 600 }}>{p.libelle}</span> },
+              { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span title={pendingSyncIds.has(p.id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingSyncIds.has(p.id) ? '#f97316' : '#22c55e' }} />
+                  <span style={{ fontWeight: 600 }}>{p.libelle}</span>
+                </span>
+              )},
               { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true, hideOnMobile: true },
               { key: 'quantite_attendue', label: 'Qté', sortable: true },
               { key: 'emplacement_prevu', label: 'Emplacement', filterable: true, hideOnMobile: true },
@@ -1060,6 +1080,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
   const [tel, setTel] = useState(prestataire.telephone ?? '')
   const [membres, setMembres] = useState<UserEvenement[]>([])
   const [prestations, setPrestations] = useState<Prestation[]>([])
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set())
   const [addModal, setAddModal] = useState(false)
   const [editingMembre, setEditingMembre] = useState<UserEvenement | null>(null)
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
@@ -1083,7 +1104,11 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
       .in('stand_id', standIds)
       .eq('prestataire_id', prestataire.id)
       .order('libelle')
-    setPrestations(data ?? [])
+    if (data) {
+      setPrestations(data)
+      const pending = await db.prestations.where('id').anyOf(data.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
+      setPendingSyncIds(new Set(pending.map(p => p.id)))
+    }
   }
 
   useEffect(() => { loadMembres(); loadPrestations() }, [])
@@ -1138,7 +1163,12 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
                 {prestations.map(p => (
                   <tr key={p.id} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)', ...conformiteBg(p.statut_conformite) }} onClick={() => setEditingPrestation(p)}>
                     <td style={{ padding: '8px 8px 8px 0', fontWeight: 600 }}>{p.stands?.numero}{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td>
-                    <td style={{ padding: '8px 8px 8px 0' }}>{p.libelle}</td>
+                    <td style={{ padding: '8px 8px 8px 0' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span title={pendingSyncIds.has(p.id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingSyncIds.has(p.id) ? '#f97316' : '#22c55e' }} />
+                        {p.libelle}
+                      </span>
+                    </td>
                     <td style={{ padding: '8px 0' }}>
                       {p.statut_conformite
                         ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
@@ -1470,6 +1500,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
   const [tab, setTab] = useState<PrestaTab>('dashboard')
   const [exportFnStands, setExportFnStands] = useState<(() => void) | null>(null)
   const [exportFnPresta, setExportFnPresta] = useState<(() => void) | null>(null)
+  const [allPendingSyncIds, setAllPendingSyncIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function load() {
@@ -1491,6 +1522,8 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
         byStand.get(s.id)!.prestations.push(p)
       }
       setStands(Array.from(byStand.values()).sort((a, b) => a.numero.localeCompare(b.numero)))
+      const pending = await db.prestations.where('id').anyOf(prests.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
+      setAllPendingSyncIds(new Set(pending.map(p => p.id)))
     }
     load()
   }, [ev.id, userId])
@@ -1584,7 +1617,12 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
               emptyState={<div className="empty-state">Aucune prestation affectée à votre société sur cet événement.</div>}
               columns={[
                 { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => (p.stands as Stand | undefined)?.numero ?? '', render: p => <strong>{(p.stands as Stand | undefined)?.numero ?? '—'}</strong> },
-                { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => <span style={{ fontWeight: 600 }}>{p.libelle}</span> },
+                { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span title={allPendingSyncIds.has((p as Prestation).id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: allPendingSyncIds.has((p as Prestation).id) ? '#f97316' : '#22c55e' }} />
+                    <span style={{ fontWeight: 600 }}>{p.libelle}</span>
+                  </span>
+                )},
                 { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true },
                 { key: 'quantite_attendue', label: 'Qté', sortable: true },
                 { key: 'emplacement_prevu', label: 'Emplacement', filterable: true },
