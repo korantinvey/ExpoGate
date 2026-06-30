@@ -321,18 +321,18 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
       db.stands.where('evenement_id').equals(ev.id).toArray(),
     ])
     const standMap = new Map(localStands.map(s => [s.id, s]))
-    if (localMcs.length) {
-      setEntries(
-        localMcs
-          .sort((a, b) => b.created_at.localeCompare(a.created_at))
-          .map(mc => ({
-            ...mc,
-            stands: mc.stand_id ? (standMap.get(mc.stand_id) ?? null) : null,
-            users: null,
-            photos: [],
-          })) as MainCourante[]
-      )
-    }
+
+    const localToDisplay = (mcs: typeof localMcs) =>
+      mcs
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map(mc => ({
+          ...mc,
+          stands: mc.stand_id ? (standMap.get(mc.stand_id) ?? null) : null,
+          users: null,
+          photos: [],
+        })) as MainCourante[]
+
+    if (localMcs.length) setEntries(localToDisplay(localMcs))
 
     if (!navigator.onLine) return
 
@@ -342,17 +342,26 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
       .eq('evenement_id', ev.id)
       .order('created_at', { ascending: false })
     if (error) { notify(error.message, 'error'); return }
-    const mapped = (data ?? []).map(e => ({
+    const serverEntries = (data ?? []).map(e => ({
       ...e,
       photos: (e.main_courante_photos as { id: string; url: string }[]) ?? [],
     })) as MainCourante[]
-    setEntries(mapped)
 
-    // Mise à jour du cache IndexedDB (sans écraser les pending)
+    // Récupérer les IDs encore en attente de sync
     const pendingIds = new Set(
       await db.main_courante.where('pending_sync').equals(1).primaryKeys()
     )
-    const toCache = mapped
+
+    // Fusionner : garder les entrées pending locales + les entrées serveur
+    const pendingEntries = localToDisplay(localMcs.filter(mc => pendingIds.has(mc.id)))
+    const merged = [
+      ...pendingEntries,
+      ...serverEntries.filter(mc => !pendingIds.has(mc.id)),
+    ].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    setEntries(merged)
+
+    // Mise à jour du cache IndexedDB (sans écraser les pending)
+    const toCache = serverEntries
       .filter(mc => !pendingIds.has(mc.id))
       .map(mc => ({
         id: mc.id,
