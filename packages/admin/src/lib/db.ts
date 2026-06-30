@@ -53,6 +53,7 @@ export interface LocalMainCourante {
   stand_id: string | null
   titre: string
   descriptif: string | null
+  etat: string
   created_at: string
   created_by: string | null
   pending_sync: 0 | 1

@@ -9,7 +9,28 @@ import { DataTable } from '../components/ui/DataTable'
 import { ExportButton } from '../components/ui/ExportButton'
 import { compressImage } from '../lib/compressImage'
 import { useToast } from '../components/ui/Toast'
-import type { Evenement, MainCourante } from '../types'
+import type { Evenement, MainCourante, McEtat } from '../types'
+
+const ETAT_LABELS: Record<McEtat, string> = {
+  a_traiter: 'À traiter',
+  pris_en_charge: 'Pris en charge',
+  resolu: 'Résolu',
+}
+
+const ETAT_STYLE: Record<McEtat, { background: string; color: string }> = {
+  a_traiter: { background: 'rgba(239,68,68,0.12)', color: '#dc2626' },
+  pris_en_charge: { background: 'rgba(59,130,246,0.12)', color: '#2563eb' },
+  resolu: { background: 'rgba(34,197,94,0.12)', color: '#16a34a' },
+}
+
+function EtatBadge({ etat }: { etat: McEtat }) {
+  const s = ETAT_STYLE[etat] ?? ETAT_STYLE.a_traiter
+  return (
+    <span style={{ ...s, borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>
+      {ETAT_LABELS[etat] ?? etat}
+    </span>
+  )
+}
 
 function fmtDateHeure(s: string) {
   return new Date(s).toLocaleDateString('fr-FR', {
@@ -26,6 +47,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
   const [standId, setStandId] = useState(mc?.stand_id ?? '')
   const [standSearch, setStandSearch] = useState('')
   const [titre, setTitre] = useState(mc?.titre ?? '')
+  const [etat, setEtat] = useState<McEtat>(mc?.etat ?? 'a_traiter')
   const [descriptif, setDescriptif] = useState(mc?.descriptif ?? '')
   const [newPhotos, setNewPhotos] = useState<File[]>([])
   const [newPhotoUrls, setNewPhotoUrls] = useState<string[]>([])
@@ -71,6 +93,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
           await db.main_courante.update(mc.id, {
             stand_id: standId || null,
             titre: titre.trim(),
+            etat,
             descriptif: descriptif.trim() || null,
             pending_sync: 1,
           })
@@ -80,6 +103,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
             evenement_id: evenementId,
             stand_id: standId || null,
             titre: titre.trim(),
+            etat,
             descriptif: descriptif.trim() || null,
             created_at: now,
             created_by: user?.id ?? null,
@@ -105,6 +129,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
         const { error } = await sb.from('main_courante').update({
           stand_id: standId || null,
           titre: titre.trim(),
+          etat,
           descriptif: descriptif.trim() || null,
         }).eq('id', mc.id)
         if (error) { setError(error.message); return false }
@@ -113,6 +138,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
           evenement_id: evenementId,
           stand_id: standId || null,
           titre: titre.trim(),
+          etat,
           descriptif: descriptif.trim() || null,
           created_by: user?.id ?? null,
         }).select().single()
@@ -205,6 +231,16 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
       <div className="form-group">
         <label>Titre <span style={{ color: 'var(--danger)' }}>*</span></label>
         <input value={titre} onChange={e => setTitre(e.target.value)} placeholder="Ex : Mobilier manquant hall B" />
+      </div>
+
+      {/* État */}
+      <div className="form-group">
+        <label>État</label>
+        <select value={etat} onChange={e => setEtat(e.target.value as McEtat)}>
+          {(Object.keys(ETAT_LABELS) as McEtat[]).map(v => (
+            <option key={v} value={v}>{ETAT_LABELS[v]}</option>
+          ))}
+        </select>
       </div>
 
       {/* Descriptif */}
@@ -323,6 +359,7 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
         evenement_id: mc.evenement_id,
         stand_id: mc.stand_id,
         titre: mc.titre,
+        etat: mc.etat,
         descriptif: mc.descriptif,
         created_at: mc.created_at,
         created_by: mc.created_by,
@@ -373,6 +410,11 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
               {
                 key: 'titre', label: 'Titre', sortable: true, filterable: true,
                 render: mc => <span style={{ fontWeight: 600 }}>{mc.titre}</span>,
+              },
+              {
+                key: 'etat', label: 'État', sortable: true, filterable: true,
+                getValue: mc => ETAT_LABELS[mc.etat] ?? mc.etat,
+                render: mc => <EtatBadge etat={mc.etat} />,
               },
               {
                 key: 'descriptif', label: 'Descriptif', filterable: true, hideOnMobile: true,

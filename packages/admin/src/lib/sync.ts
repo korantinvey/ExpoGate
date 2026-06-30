@@ -21,7 +21,7 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
           .in('stand_id', standIds)
       : Promise.resolve({ data: [], error: null }),
     sb.from('main_courante')
-      .select('id, evenement_id, stand_id, titre, descriptif, created_at, created_by')
+      .select('id, evenement_id, stand_id, titre, descriptif, etat, created_at, created_by')
       .eq('evenement_id', eventId),
   ])
   if (prestsErr) throw new Error(prestsErr.message)
@@ -96,6 +96,7 @@ export async function syncPending(): Promise<number> {
       stand_id: mc.stand_id,
       titre: mc.titre,
       descriptif: mc.descriptif,
+      etat: mc.etat,
       created_at: mc.created_at,
       created_by: mc.created_by,
     }, { onConflict: 'id' })

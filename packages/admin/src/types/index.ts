@@ -1,6 +1,7 @@
 export type EvenementStatut = 'parametrage' | 'actif' | 'termine'
 export type RoleLocal = 'organisateur' | 'prestataire'
 export type ControleStatut = 'conforme' | 'non_conforme' | 'absent' | 'a_verifier'
+export type McEtat = 'a_traiter' | 'pris_en_charge' | 'resolu'
 
 export interface Evenement {
   id: string
@@ -84,6 +85,7 @@ export interface MainCourante {
   stand_id: string | null
   titre: string
   descriptif: string | null
+  etat: McEtat
   created_at: string
   created_by: string | null
   // Jointures
