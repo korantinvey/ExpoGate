@@ -13,7 +13,7 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
   const standIds = stands.map(s => s.id)
   const { data: rawPrestations, error: prestsErr } = standIds.length
     ? await sb.from('prestations')
-        .select('id, stand_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
+        .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
         .in('stand_id', standIds)
     : { data: [], error: null }
   if (prestsErr) throw new Error(prestsErr.message)

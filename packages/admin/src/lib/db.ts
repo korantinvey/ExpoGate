@@ -23,6 +23,7 @@ export interface LocalStand {
 export interface LocalPrestation {
   id: string
   stand_id: string
+  prestataire_id: string | null
   libelle: string
   categorie: string | null
   quantite_attendue: number
