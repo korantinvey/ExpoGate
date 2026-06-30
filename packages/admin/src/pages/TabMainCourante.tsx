@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { sb, sbAdmin } from '../lib/supabase'
 import { db } from '../lib/db'
 import type { LocalStand } from '../lib/db'
+import { syncPending } from '../lib/sync'
 import { useAuth } from '../hooks/useAuth'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -314,7 +315,7 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const { notify, toastEl } = useToast()
 
-  async function load() {
+  const load = useCallback(async function load() {
     // Affichage immédiat depuis IndexedDB
     const [localMcs, localStands] = await Promise.all([
       db.main_courante.where('evenement_id').equals(ev.id).toArray(),
@@ -375,9 +376,18 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
         pending_sync: 0 as const,
       }))
     if (toCache.length) await db.main_courante.bulkPut(toCache)
-  }
+  }, [ev.id])
 
-  useEffect(() => { load() }, [ev.id])
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const onOnline = async () => {
+      await syncPending()
+      await load()
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [load])
 
   async function deleteEntry(mc: MainCourante) {
     if (!confirm(`Supprimer "${mc.titre}" ?`)) return
