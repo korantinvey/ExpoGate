@@ -33,13 +33,15 @@ export function useInstallPrompt() {
     }
   }, [standalone])
 
-  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase())
+  const ua = navigator.userAgent.toLowerCase()
+  const isIos = /iphone|ipad|ipod/.test(ua)
+  const isAndroid = /android/.test(ua)
 
   // Cas 1 : standalone → rien (standalone = true)
   // Cas 2 : installée mais accès via navigateur
   const inBrowserAfterInstall = wasInstalled && !standalone
-  // Cas 3 : pas encore installée, navigateur supporte l'install ou iOS
-  const canPrompt = !standalone && !wasInstalled && (!!deferredPrompt || isIos)
+  // Cas 3 : pas encore installée — prompt natif dispo, ou mobile sans prompt natif
+  const canPrompt = !standalone && !wasInstalled && (!!deferredPrompt || isIos || isAndroid)
 
   async function triggerInstall(): Promise<boolean> {
     if (!deferredPrompt) return false
@@ -49,5 +51,5 @@ export function useInstallPrompt() {
     return outcome === 'accepted'
   }
 
-  return { standalone, canPrompt, isIos, triggerInstall, inBrowserAfterInstall }
+  return { standalone, canPrompt, isIos, isAndroid, hasNativePrompt: !!deferredPrompt, triggerInstall, inBrowserAfterInstall }
 }

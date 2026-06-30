@@ -22,7 +22,7 @@ import { ThemeContext, useThemeProvider } from './hooks/useTheme'
 function AppRoutes() {
   const { user, loading } = useAuth()
   const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
-  const { standalone, canPrompt, isIos, triggerInstall, inBrowserAfterInstall } = useInstallPrompt()
+  const { standalone, canPrompt, isIos, isAndroid, hasNativePrompt, triggerInstall, inBrowserAfterInstall } = useInstallPrompt()
 
   const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('install_banner_dismissed') === '1')
   const [useAppDismissed, setUseAppDismissed] = useState(() => localStorage.getItem('use_app_dismissed') === '1')
@@ -54,21 +54,23 @@ function AppRoutes() {
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Installer Expogate</div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
           {isIos
-            ? <>Appuyez sur le bouton <strong>Partager</strong> puis <strong>"Sur l'écran d'accueil"</strong> pour installer l'application et l'utiliser hors ligne.</>
-            : 'Installez l\'application pour un accès rapide et une utilisation hors ligne.'}
+            ? <>Appuyez sur le bouton <strong>Partager ↑</strong> en bas de Safari, puis <strong>"Sur l'écran d'accueil"</strong> pour installer l'application.</>
+            : isAndroid && !hasNativePrompt
+              ? <>Appuyez sur le menu <strong>⋮</strong> de votre navigateur, puis <strong>"Ajouter à l'écran d'accueil"</strong>.</>
+              : 'Installez l\'application pour un accès rapide et une utilisation hors ligne.'}
         </div>
-        {isIos ? (
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={dismissInstall}>Compris</button>
+        {isIos || (isAndroid && !hasNativePrompt) ? (
+          <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={dismissInstall}>Compris</button>
         ) : (
           <>
             <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={async () => { await triggerInstall(); dismissInstall() }}>
               Installer l'application
             </button>
-            <button onClick={dismissInstall} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>
-              Plus tard
-            </button>
           </>
         )}
+        <button onClick={dismissInstall} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>
+          Plus tard
+        </button>
       </div>
     </div>
   ) : null
