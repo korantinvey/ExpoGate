@@ -20,7 +20,10 @@ export function ImportZone({ expectedCols, onRows }: Props) {
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'array' })
       const sheet = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+      const rows = raw.map(row =>
+        Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase().trim(), v]))
+      )
       setPreview(rows.slice(0, 5))
       onRows(rows)
     } catch (err: unknown) {
