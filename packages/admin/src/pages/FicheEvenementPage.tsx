@@ -254,7 +254,12 @@ function TabStands({ ev }: { ev: Evenement }) {
   const nbValides = stands.filter(s => s._statut === 'valide').length
 
   const columns = [
-    { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span> },
+    { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: s._statut === 'valide' ? '#22c55e' : s._statut === 'a_valider' ? '#f97316' : '#9ca3af' }} title={s._statut === 'valide' ? 'Validé' : s._statut === 'a_valider' ? 'À valider' : 'Sans prestation'} />
+        <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span>
+      </span>
+    )},
     { key: 'hall', label: 'Hall / Pavillon', sortable: true, filterable: true },
     { key: 'numero', label: 'N° de stand', sortable: true, filterable: true },
     { key: 'surface', label: 'Surface (m²)', sortable: true, hideOnMobile: true },
@@ -728,7 +733,12 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
             emptyState={<div className="empty-state"><div className="empty-icon">▤</div><div>Aucune prestation pour cet événement</div></div>}
             columns={[
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
-              { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => <span style={{ fontWeight: 600 }}>{p.libelle}</span> },
+              { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: p.statut_conformite === 'conforme' ? '#22c55e' : (p.statut_conformite === 'non_conforme' || p.statut_conformite === 'absent') ? '#f97316' : p.statut_conformite === 'a_verifier' ? '#d97706' : '#9ca3af' }} title={p.statut_conformite ?? 'Non contrôlée'} />
+                  <span style={{ fontWeight: 600 }}>{p.libelle}</span>
+                </span>
+              )},
               { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true, hideOnMobile: true },
               { key: 'quantite_attendue', label: 'Qté', sortable: true },
               { key: 'emplacement_prevu', label: 'Emplacement', filterable: true, hideOnMobile: true },
