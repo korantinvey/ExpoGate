@@ -639,22 +639,26 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
   async function doImport(): Promise<boolean> {
     if (!rows.length) { setError('Veuillez sélectionner un fichier.'); return false }
     const [{ data: stands }, { data: prestataires }] = await Promise.all([
-      sb.from('stands').select('id, numero').eq('evenement_id', evenementId),
+      sb.from('stands').select('id, numero, hall').eq('evenement_id', evenementId),
       sb.from('prestataires').select('id, raison_sociale'),
     ])
-    const standMap = Object.fromEntries((stands ?? []).map(s => [String(s.numero).trim().toLowerCase(), s.id]))
+    const standMapFull = Object.fromEntries((stands ?? []).map(s => [`${String(s.hall ?? '').trim().toLowerCase()}|${String(s.numero).trim().toLowerCase()}`, s.id]))
+    const standMapNum = Object.fromEntries((stands ?? []).map(s => [String(s.numero).trim().toLowerCase(), s.id]))
     const prestaMap = Object.fromEntries((prestataires ?? []).map(p => [p.raison_sociale.trim().toLowerCase(), p.id]))
 
     const toInsert: object[] = []
     const erreurs: string[] = []
     rows.forEach((r, i) => {
       const numStand = String(r.numero_stand ?? '').trim()
+      const hallStand = String(r.hall_stand ?? '').trim()
       const libelle = String(r.libelle ?? '').trim()
       if (!numStand || !libelle) return
-      const standId = standMap[numStand.toLowerCase()]
+      const standId = hallStand
+        ? standMapFull[`${hallStand.toLowerCase()}|${numStand.toLowerCase()}`]
+        : standMapNum[numStand.toLowerCase()]
       const raisonSociale = String(r.raison_sociale_prestataire ?? '').trim()
       const prestaId = raisonSociale ? prestaMap[raisonSociale.toLowerCase()] : null
-      if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${numStand}" introuvable`); return }
+      if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${hallStand ? hallStand + ' / ' : ''}${numStand}" introuvable`); return }
       if (raisonSociale && !prestaId) { erreurs.push(`Ligne ${i + 2} : prestataire "${raisonSociale}" introuvable`); return }
       toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: parseInt(String(r.quantite)) || 1, emplacement_prevu: (r.position as string) || null, prestataire_id: prestaId })
     })
@@ -676,7 +680,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
         ↓ Télécharger le modèle Excel
       </button>
       <ImportZone
-        expectedCols={['numero_stand', 'libelle', 'categorie', 'quantite', 'position', 'raison_sociale_prestataire']}
+        expectedCols={['numero_stand', 'hall_stand', 'libelle', 'categorie', 'quantite', 'position', 'raison_sociale_prestataire']}
         onRows={setRows}
       />
     </Modal>
