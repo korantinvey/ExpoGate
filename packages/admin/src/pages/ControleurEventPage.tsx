@@ -10,6 +10,7 @@ interface StandProgress extends LocalStand {
   total: number
   done: number
   issues: number
+  pending: number
 }
 
 function standColor(s: StandProgress) {
@@ -66,6 +67,7 @@ export function ControleurEventPage() {
           total: prests.length,
           done: prests.filter(p => p.statut_conformite !== null).length,
           issues: prests.filter(p => p.statut_conformite === 'non_conforme' || p.statut_conformite === 'absent').length,
+          pending: prests.filter(p => p.pending_sync === 1).length,
         }
       }))
       setStands(withProgress.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })))
@@ -81,6 +83,7 @@ export function ControleurEventPage() {
     if (!eventId || !navigator.onLine || downloading) return
     setDownloading(true)
     try {
+      await syncPending()
       await downloadEvent(eventId)
       await loadLocal()
     } catch { /* silencieux */ } finally {
@@ -243,6 +246,10 @@ export function ControleurEventPage() {
                       <div className="ctrl-stand-top">
                         <span className="ctrl-stand-numero">{s.numero}</span>
                         {s.hall && <span className="ctrl-stand-hall">{s.hall}</span>}
+                        <span
+                          title={s.pending > 0 ? 'Modifications en attente de sync' : 'Synchronisé'}
+                          style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: s.pending > 0 ? '#f97316' : '#22c55e', display: 'inline-block', marginLeft: 4 }}
+                        />
                       </div>
                       {s.nom_exposant && <div className="ctrl-stand-exposant">{s.nom_exposant}</div>}
                       {s.total > 0 && (

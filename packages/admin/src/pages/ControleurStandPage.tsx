@@ -228,9 +228,10 @@ function PrestationCard({
               {st.label}
             </span>
           )}
-          {prest.pending_sync === 1 && (
-            <span title="En attente de sync" style={{ fontSize: 10, color: 'var(--amber)' }}>●</span>
-          )}
+          <span
+            title={prest.pending_sync === 1 ? 'En attente de synchronisation' : 'Synchronisé'}
+            style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: prest.pending_sync === 1 ? '#f97316' : '#22c55e', display: 'inline-block' }}
+          />
           <span style={{ color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, transform: expanded ? 'rotate(90deg)' : undefined, transition: 'transform 0.2s' }}>›</span>
         </div>
       </div>
