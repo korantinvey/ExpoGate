@@ -276,7 +276,14 @@ export function ControleurStandPage() {
   }, [standId])
 
   useEffect(() => {
-    loadData()
+    const init = async () => {
+      if (navigator.onLine) {
+        setSyncing(true)
+        try { await syncPending() } finally { setSyncing(false) }
+      }
+      await loadData()
+    }
+    init()
     const on = () => { setIsOnline(true); triggerSync() }
     const off = () => setIsOnline(false)
     window.addEventListener('online', on)
