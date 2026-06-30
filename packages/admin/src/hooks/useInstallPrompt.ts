@@ -13,24 +13,33 @@ function isStandalone() {
 }
 
 export function useInstallPrompt() {
+  const [standalone] = useState(isStandalone)
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [installed, setInstalled] = useState(isStandalone)
+  // wasInstalled: true si l'app a déjà été installée sur cet appareil (mémorisé en localStorage)
+  const [wasInstalled, setWasInstalled] = useState(() => localStorage.getItem('pwa_installed') === '1')
 
   useEffect(() => {
-    if (isStandalone()) return
+    if (standalone) return
     const onBefore = (e: Event) => { e.preventDefault(); setDeferredPrompt(e as BeforeInstallPromptEvent) }
-    const onInstalled = () => setInstalled(true)
+    const onInstalled = () => {
+      localStorage.setItem('pwa_installed', '1')
+      setWasInstalled(true)
+    }
     window.addEventListener('beforeinstallprompt', onBefore)
     window.addEventListener('appinstalled', onInstalled)
     return () => {
       window.removeEventListener('beforeinstallprompt', onBefore)
       window.removeEventListener('appinstalled', onInstalled)
     }
-  }, [])
+  }, [standalone])
 
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase())
-  // canPrompt = true si le navigateur a émis beforeinstallprompt OU si iOS hors standalone
-  const canPrompt = !installed && (!!deferredPrompt || isIos)
+
+  // Cas 1 : standalone → rien (standalone = true)
+  // Cas 2 : installée mais accès via navigateur
+  const inBrowserAfterInstall = wasInstalled && !standalone
+  // Cas 3 : pas encore installée, navigateur supporte l'install ou iOS
+  const canPrompt = !standalone && !wasInstalled && (!!deferredPrompt || isIos)
 
   async function triggerInstall(): Promise<boolean> {
     if (!deferredPrompt) return false
@@ -40,5 +49,5 @@ export function useInstallPrompt() {
     return outcome === 'accepted'
   }
 
-  return { canPrompt, isIos, triggerInstall }
+  return { standalone, canPrompt, isIos, triggerInstall, inBrowserAfterInstall }
 }
