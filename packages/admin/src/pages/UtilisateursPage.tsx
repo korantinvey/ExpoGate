@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Mail, Bell, Smartphone } from 'lucide-react'
 import { sb, sbAdmin } from '../lib/supabase'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -277,9 +278,9 @@ export function UtilisateursPage() {
               { key: 'last_sign_in_at', label: 'Dernière connexion', sortable: true, hideOnMobile: true, getValue: u => u.last_sign_in_at ?? '', render: u => u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : <span className="text-muted">Jamais</span> },
               { key: 'actions', label: '', render: u => (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-secondary btn-sm" title="Envoyer une invitation" onClick={e => { e.stopPropagation(); sendInvite(u.email) }} style={{ padding: '4px 8px', fontSize: 15 }}>✉️</button>
-                  <button className="btn btn-secondary btn-sm" title="Envoyer une notification" onClick={e => { e.stopPropagation(); setPushModal(u) }} style={{ padding: '4px 8px', fontSize: 15 }}>🔔</button>
-                  <button className="btn btn-secondary btn-sm" title="Appareils enregistrés" onClick={e => { e.stopPropagation(); setDevicesModal(u) }} style={{ padding: '4px 8px', fontSize: 15 }}>📱</button>
+                  <button className="btn btn-secondary btn-sm" title="Envoyer une invitation" onClick={e => { e.stopPropagation(); sendInvite(u.email) }} style={{ padding: '5px 7px', lineHeight: 0 }}><Mail size={15} /></button>
+                  <button className="btn btn-secondary btn-sm" title="Envoyer une notification" onClick={e => { e.stopPropagation(); setPushModal(u) }} style={{ padding: '5px 7px', lineHeight: 0 }}><Bell size={15} /></button>
+                  <button className="btn btn-secondary btn-sm" title="Appareils enregistrés" onClick={e => { e.stopPropagation(); setDevicesModal(u) }} style={{ padding: '5px 7px', lineHeight: 0 }}><Smartphone size={15} /></button>
                 </div>
               )},
             ]}
