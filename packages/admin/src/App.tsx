@@ -16,17 +16,28 @@ import { ControleurEventPage } from './pages/ControleurEventPage'
 import { ControleurStandPage } from './pages/ControleurStandPage'
 import { sb } from './lib/supabase'
 import { usePushNotifications } from './hooks/usePushNotifications'
+import { useInstallPrompt } from './hooks/useInstallPrompt'
 import { ThemeContext, useThemeProvider } from './hooks/useTheme'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
   const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
   const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('push_banner_dismissed') === '1')
-  const showBanner = supported && permission === 'default' && !bannerDismissed
+  const { canPrompt, isIos, triggerInstall } = useInstallPrompt()
+  const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('install_banner_dismissed') === '1')
+
+  // Montrer l'install banner d'abord, puis le push banner seulement après
+  const showInstallBanner = canPrompt && !installDismissed
+  const showBanner = supported && permission === 'default' && !bannerDismissed && !showInstallBanner
 
   function dismissBanner() {
     localStorage.setItem('push_banner_dismissed', '1')
     setBannerDismissed(true)
+  }
+
+  function dismissInstall() {
+    localStorage.setItem('install_banner_dismissed', '1')
+    setInstallDismissed(true)
   }
 
   useEffect(() => {
@@ -53,6 +64,32 @@ function AppRoutes() {
       }} />
     )
   }
+
+  const installBanner = showInstallBanner ? (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>📲</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Installer Expogate</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
+          {isIos
+            ? <>Appuyez sur le bouton <strong>Partager</strong> puis <strong>"Sur l'écran d'accueil"</strong> pour installer l'application.</>
+            : 'Installez l\'application pour un accès rapide et une utilisation hors ligne.'}
+        </div>
+        {isIos ? (
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={dismissInstall}>Compris</button>
+        ) : (
+          <>
+            <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={async () => { await triggerInstall(); dismissInstall() }}>
+              Installer l'application
+            </button>
+            <button onClick={dismissInstall} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>
+              Plus tard
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  ) : null
 
   const pushBanner = showBanner ? (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -84,6 +121,7 @@ function AppRoutes() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
+        {installBanner}
         {pushBanner}
       </>
     )
@@ -102,6 +140,7 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      {installBanner}
       {pushBanner}
     </>
   )
