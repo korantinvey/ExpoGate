@@ -27,20 +27,45 @@ async function doSubscribe(userId: string) {
 export function usePushNotifications(userId: string | null) {
   const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && !!VAPID_PUBLIC_KEY
   const [permission, setPermission] = useState<NotificationPermission>(supported ? Notification.permission : 'denied')
+  const [subscribed, setSubscribed] = useState(false)
 
   useEffect(() => {
     if (!supported || !userId) return
-    if (Notification.permission === 'granted') {
-      doSubscribe(userId).catch(() => {})
+    if (Notification.permission !== 'granted') return
+
+    const init = async () => {
+      const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      if (!existing) return
+
+      const { data } = await sb.from('push_subscriptions')
+        .select('endpoint')
+        .eq('user_id', userId)
+        .eq('endpoint', existing.endpoint)
+        .maybeSingle()
+
+      if (data) {
+        setSubscribed(true)
+        await doSubscribe(userId) // refresh user_agent
+      } else {
+        // Subscription was revoked by admin — clear dismissed flag so banner re-appears
+        localStorage.removeItem('push_banner_dismissed')
+        setSubscribed(false)
+      }
     }
+
+    init().catch(() => {})
   }, [userId, supported])
 
   async function requestPermission() {
     if (!supported || !userId) return
     const result = await Notification.requestPermission()
     setPermission(result)
-    if (result === 'granted') await doSubscribe(userId)
+    if (result === 'granted') {
+      await doSubscribe(userId)
+      setSubscribed(true)
+    }
   }
 
-  return { permission, requestPermission, supported }
+  return { permission, requestPermission, supported, subscribed }
 }
