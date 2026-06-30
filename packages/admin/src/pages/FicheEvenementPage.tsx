@@ -121,9 +121,9 @@ function ImportStandsModal({ evenementId, nomEvenement, onDone }: { evenementId:
     if (!rows.length) { setError('Veuillez sélectionner un fichier.'); return false }
     const payload = rows.map(r => ({
       evenement_id: evenementId,
-      nom_exposant: (r.nom_exposant ?? r['Nom exposant'] ?? null) as string | null,
-      hall: (r.hall ?? r.Hall ?? null) as string | null,
-      numero: String(r.numero ?? r.Numero ?? r.NUMERO ?? '').trim(),
+      nom_exposant: (r.nom_exposant as string) || null,
+      hall: (r.hall as string) || null,
+      numero: String(r.numero ?? '').trim(),
       surface: r.surface != null && r.surface !== '' ? parseFloat(String(r.surface)) : null,
       angles: r.angles != null && r.angles !== '' ? parseInt(String(r.angles)) : null,
     })).filter(r => r.numero)
