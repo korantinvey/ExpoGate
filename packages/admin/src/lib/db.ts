@@ -92,3 +92,15 @@ class ExpoGateDB extends Dexie {
 }
 
 export const db = new ExpoGateDB()
+
+export async function getPendingPrestaIds(ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set()
+  const rows = await db.prestations.where('id').anyOf(ids).filter(p => p.pending_sync === 1).toArray()
+  return new Set(rows.map(p => p.id))
+}
+
+export async function getPendingStandIds(standIds: string[]): Promise<Set<string>> {
+  if (!standIds.length) return new Set()
+  const rows = await db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray()
+  return new Set(rows.map(p => p.stand_id))
+}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sb, sbAdmin } from '../lib/supabase'
-import { db } from '../lib/db'
+import { getPendingPrestaIds, getPendingStandIds } from '../lib/db'
+import { SyncDot } from '../components/ui/SyncDot'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -237,13 +238,15 @@ function TabStands({ ev }: { ev: Evenement }) {
     const standIds = rawStands.map(s => s.id)
     const prestationsParStand: Record<string, { statut_conformite: string | null }[]> = {}
     if (standIds.length > 0) {
-      const { data: p } = await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds)
+      const [{ data: p }, pendingIds] = await Promise.all([
+        sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds),
+        getPendingStandIds(standIds),
+      ])
       for (const row of p ?? []) {
         if (!prestationsParStand[row.stand_id]) prestationsParStand[row.stand_id] = []
         prestationsParStand[row.stand_id].push(row)
       }
-      const pendingLocal = await db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray()
-      setPendingStandIds(new Set(pendingLocal.map(p => p.stand_id)))
+      setPendingStandIds(pendingIds)
     }
     setStands(rawStands.map(s => categoriserStand(s, prestationsParStand)))
   }
@@ -260,7 +263,7 @@ function TabStands({ ev }: { ev: Evenement }) {
   const columns = [
     { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => (
       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span title={pendingStandIds.has(s.id) ? 'Modifications en attente de sync' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingStandIds.has(s.id) ? '#f97316' : '#22c55e' }} />
+        <SyncDot pending={pendingStandIds.has(s.id)} />
         <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span>
       </span>
     )},
@@ -714,8 +717,10 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
       .order('libelle')
     if (data) {
       setPrestations(data)
-      const pending = await db.prestations.where('id').anyOf(data.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
-      setPendingSyncIds(new Set(pending.map(p => p.id)))
+      setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
+    } else {
+      setPrestations([])
+      setPendingSyncIds(new Set())
     }
   }
 
@@ -744,7 +749,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
               { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span title={pendingSyncIds.has(p.id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingSyncIds.has(p.id) ? '#f97316' : '#22c55e' }} />
+                  <SyncDot pending={pendingSyncIds.has(p.id)} />
                   <span style={{ fontWeight: 600 }}>{p.libelle}</span>
                 </span>
               )},

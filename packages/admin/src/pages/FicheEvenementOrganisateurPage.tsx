@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sb, sbAdmin } from '../lib/supabase'
-import { db } from '../lib/db'
+import { db, getPendingPrestaIds, getPendingStandIds } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
 import { downloadTemplate } from '../lib/excel'
 import { compressImage } from '../lib/compressImage'
 import { normalizeNom, normalizePrenom, normalizeEmail, isValidEmail } from '../lib/normalize'
 import { Modal } from '../components/ui/Modal'
+import { SyncDot } from '../components/ui/SyncDot'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { DataTable } from '../components/ui/DataTable'
@@ -255,13 +256,17 @@ function TabStands({ ev }: { ev: Evenement }) {
       const standIds = standsData.map(s => s.id)
       const prestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
       if (standIds.length) {
-        const { data: prestsData } = await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds)
+        const [{ data: prestsData }, pendingIds] = await Promise.all([
+          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds),
+          getPendingStandIds(standIds),
+        ])
         for (const row of prestsData ?? []) {
           if (!prestsByStand[row.stand_id]) prestsByStand[row.stand_id] = []
           prestsByStand[row.stand_id].push(row)
         }
-        const pendingLocal = await db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray()
-        setPendingStandIds(new Set(pendingLocal.map(p => p.stand_id)))
+        setPendingStandIds(pendingIds)
+      } else {
+        setPendingStandIds(new Set())
       }
       setStands(standsData.map(s => categoriserStand(s, prestsByStand)))
     } catch { /* données locales déjà affichées */ }
@@ -308,7 +313,7 @@ function TabStands({ ev }: { ev: Evenement }) {
             columns={[
               { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span title={pendingStandIds.has(s.id) ? 'Modifications en attente de sync' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingStandIds.has(s.id) ? '#f97316' : '#22c55e' }} />
+                  <SyncDot pending={pendingStandIds.has(s.id)} />
                   <span style={{ fontWeight: 600 }}>{s.nom_exposant}</span>
                 </span>
               )},
@@ -757,10 +762,10 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
 
   async function loadFromCache() {
     const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
-    if (!localStands.length) return
+    if (!localStands.length) { setPrestations([]); setPendingSyncIds(new Set()); return }
     const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
     const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
-    setPendingSyncIds(new Set(localPrests.filter(p => p.pending_sync === 1).map(p => p.id)))
+    setPendingSyncIds(await getPendingPrestaIds(localPrests.map(p => p.id)))
     setPrestations(localPrests.map(p => ({
       ...p,
       stands: standMap[p.stand_id] ?? null,
@@ -784,8 +789,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
         .order('libelle')
       if (!error && data) {
         setPrestations(data)
-        const pending = await db.prestations.where('id').anyOf(data.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
-        setPendingSyncIds(new Set(pending.map(p => p.id)))
+        setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
       }
     } catch { /* données locales déjà affichées */ }
   }
@@ -815,7 +819,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
               { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span title={pendingSyncIds.has(p.id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingSyncIds.has(p.id) ? '#f97316' : '#22c55e' }} />
+                  <SyncDot pending={pendingSyncIds.has(p.id)} />
                   <span style={{ fontWeight: 600 }}>{p.libelle}</span>
                 </span>
               )},
@@ -1098,7 +1102,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
   async function loadPrestations() {
     const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', evenementId)
     const standIds = (stands ?? []).map(s => s.id)
-    if (!standIds.length) { setPrestations([]); return }
+    if (!standIds.length) { setPrestations([]); setPendingSyncIds(new Set()); return }
     const { data } = await sb.from('prestations')
       .select('*, stands(numero, nom_exposant), users(nom, prenom)')
       .in('stand_id', standIds)
@@ -1106,8 +1110,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
       .order('libelle')
     if (data) {
       setPrestations(data)
-      const pending = await db.prestations.where('id').anyOf(data.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
-      setPendingSyncIds(new Set(pending.map(p => p.id)))
+      setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
     }
   }
 
@@ -1165,7 +1168,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
                     <td style={{ padding: '8px 8px 8px 0', fontWeight: 600 }}>{p.stands?.numero}{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td>
                     <td style={{ padding: '8px 8px 8px 0' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span title={pendingSyncIds.has(p.id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: pendingSyncIds.has(p.id) ? '#f97316' : '#22c55e' }} />
+                        <SyncDot pending={pendingSyncIds.has(p.id)} />
                         {p.libelle}
                       </span>
                     </td>
@@ -1521,9 +1524,10 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
         if (!byStand.has(s.id)) byStand.set(s.id, { ...s, prestations: [] })
         byStand.get(s.id)!.prestations.push(p)
       }
-      setStands(Array.from(byStand.values()).sort((a, b) => a.numero.localeCompare(b.numero)))
-      const pending = await db.prestations.where('id').anyOf(prests.map(p => p.id)).filter(p => p.pending_sync === 1).toArray()
-      setAllPendingSyncIds(new Set(pending.map(p => p.id)))
+      const eventStands = Array.from(byStand.values()).sort((a, b) => a.numero.localeCompare(b.numero))
+      setStands(eventStands)
+      const eventPrestIds = eventStands.flatMap(s => s.prestations.map(p => p.id))
+      setAllPendingSyncIds(await getPendingPrestaIds(eventPrestIds))
     }
     load()
   }, [ev.id, userId])
@@ -1619,7 +1623,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
                 { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => (p.stands as Stand | undefined)?.numero ?? '', render: p => <strong>{(p.stands as Stand | undefined)?.numero ?? '—'}</strong> },
                 { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span title={allPendingSyncIds.has((p as Prestation).id) ? 'En attente de synchronisation' : 'Synchronisé'} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: allPendingSyncIds.has((p as Prestation).id) ? '#f97316' : '#22c55e' }} />
+                    <SyncDot pending={allPendingSyncIds.has(p.id)} />
                     <span style={{ fontWeight: 600 }}>{p.libelle}</span>
                   </span>
                 )},
