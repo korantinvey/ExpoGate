@@ -78,6 +78,20 @@ export interface Photo {
   prise_le: string
 }
 
+export interface MainCourante {
+  id: string
+  evenement_id: string
+  stand_id: string | null
+  titre: string
+  descriptif: string | null
+  created_at: string
+  created_by: string | null
+  // Jointures
+  stands?: Pick<Stand, 'numero' | 'nom_exposant'> | null
+  users?: Pick<User, 'nom' | 'prenom'> | null
+  photos?: { id: string; url: string }[]
+}
+
 export interface UserEvenement {
   id: string
   user_id: string

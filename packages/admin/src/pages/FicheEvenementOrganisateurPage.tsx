@@ -15,6 +15,7 @@ import { ExportButton } from '../components/ui/ExportButton'
 import { ImportZone } from '../components/ui/ImportZone'
 import { DateInput } from '../components/ui/DateInput'
 import { useToast } from '../components/ui/Toast'
+import { TabMainCourante } from './TabMainCourante'
 import type {
   Evenement, EvenementStatut, Stand, Prestation, ControleStatut,
   Prestataire, User, UserEvenement, RoleLocal,
@@ -1417,7 +1418,7 @@ function TabDashboard({ ev }: { ev: Evenement }) {
 }
 
 // ── Vue organisateur ──────────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
+type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
 
 export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () => void }) {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -1430,6 +1431,7 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
     prestations: 'Prestations',
     prestataires: 'Prestataires',
     utilisateurs: 'Utilisateurs',
+    main_courante: 'Main courante',
   }
 
   return (
@@ -1448,6 +1450,7 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
+      {tab === 'main_courante' && <TabMainCourante ev={ev} />}
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); onReload() }} />}
     </>

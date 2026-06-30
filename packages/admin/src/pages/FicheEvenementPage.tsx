@@ -13,6 +13,7 @@ import { fmtDate } from '../lib/format'
 import { downloadTemplate } from '../lib/excel'
 import { compressImage } from '../lib/compressImage'
 import { normalizeNom, normalizePrenom, normalizeEmail, isValidEmail } from '../lib/normalize'
+import { TabMainCourante } from './TabMainCourante'
 import type {
   Evenement, EvenementStatut, Stand, Prestation, ControleStatut,
   Prestataire, User, UserEvenement, RoleLocal,
@@ -1361,7 +1362,7 @@ function TabDashboard({ ev }: { ev: Evenement }) {
 }
 
 // ── Page principale FicheEvenement ────────────────────────────────────────────
-type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs'
+type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
 
 export function FicheEvenementPage() {
   const { id } = useParams<{ id: string }>()
@@ -1396,9 +1397,9 @@ export function FicheEvenementPage() {
       </div>
 
       <div className="tabs">
-        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs'] as Tab[]).map(t => (
+        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs', 'main_courante'] as Tab[]).map(t => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs' }[t]}
+            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs', main_courante: 'Main courante' }[t]}
           </button>
         ))}
       </div>
@@ -1409,6 +1410,7 @@ export function FicheEvenementPage() {
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
+      {tab === 'main_courante' && <TabMainCourante ev={ev} />}
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); load() }} />}
     </>

@@ -1,0 +1,341 @@
+import { useEffect, useState } from 'react'
+import { sb, sbAdmin } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
+import { Modal } from '../components/ui/Modal'
+import { Alert } from '../components/ui/Alert'
+import { DataTable } from '../components/ui/DataTable'
+import { ExportButton } from '../components/ui/ExportButton'
+import { compressImage } from '../lib/compressImage'
+import { useToast } from '../components/ui/Toast'
+import type { Evenement, Stand, MainCourante } from '../types'
+
+function fmtDateHeure(s: string) {
+  return new Date(s).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// ── Formulaire ─────────────────────────────────────────────────────────────────
+
+function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; evenementId: string; onSaved: () => void }) {
+  const { user } = useAuth()
+  const [stands, setStands] = useState<Stand[]>([])
+  const [standId, setStandId] = useState(mc?.stand_id ?? '')
+  const [standSearch, setStandSearch] = useState('')
+  const [titre, setTitre] = useState(mc?.titre ?? '')
+  const [descriptif, setDescriptif] = useState(mc?.descriptif ?? '')
+  const [newPhotos, setNewPhotos] = useState<File[]>([])
+  const [newPhotoUrls, setNewPhotoUrls] = useState<string[]>([])
+  const [existingPhotos, setExistingPhotos] = useState<{ id: string; url: string }[]>(mc?.photos ?? [])
+  const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [lightbox, setLightbox] = useState<string | null>(null)
+
+  useEffect(() => {
+    sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero')
+      .then(({ data }) => {
+        if (!data) return
+        setStands(data)
+        if (mc?.stand_id) {
+          const found = data.find(s => s.id === mc.stand_id)
+          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+        }
+      })
+  }, [evenementId])
+
+  useEffect(() => {
+    const urls = newPhotos.map(f => URL.createObjectURL(f))
+    setNewPhotoUrls(urls)
+    return () => urls.forEach(u => URL.revokeObjectURL(u))
+  }, [newPhotos])
+
+  async function deleteExistingPhoto(id: string) {
+    if (!confirm('Supprimer cette photo ?')) return
+    await sbAdmin.from('main_courante_photos').delete().eq('id', id)
+    setExistingPhotos(prev => prev.filter(p => p.id !== id))
+  }
+
+  async function save(): Promise<boolean> {
+    setUploading(true)
+    try {
+      if (!titre.trim()) { setError('Le titre est obligatoire.'); return false }
+
+      let savedId = mc?.id
+      if (mc) {
+        const { error } = await sb.from('main_courante').update({
+          stand_id: standId || null,
+          titre: titre.trim(),
+          descriptif: descriptif.trim() || null,
+        }).eq('id', mc.id)
+        if (error) { setError(error.message); return false }
+      } else {
+        const { data, error } = await sb.from('main_courante').insert({
+          evenement_id: evenementId,
+          stand_id: standId || null,
+          titre: titre.trim(),
+          descriptif: descriptif.trim() || null,
+          created_by: user?.id ?? null,
+        }).select().single()
+        if (error) { setError(error.message); return false }
+        savedId = data.id
+      }
+
+      if (newPhotos.length && savedId) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+        const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE as string
+        for (const file of newPhotos) {
+          let compressed: File
+          try { compressed = await compressImage(file) } catch { compressed = file }
+          const path = `main-courante/${savedId}/${crypto.randomUUID()}.jpg`
+          const res = await fetch(`${supabaseUrl}/storage/v1/object/Photos/${path}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+            body: compressed,
+          })
+          if (res.ok) {
+            const publicUrl = `${supabaseUrl}/storage/v1/object/public/Photos/${path}`
+            await sbAdmin.from('main_courante_photos').insert({ main_courante_id: savedId, url: publicUrl })
+          }
+        }
+      }
+
+      onSaved()
+      return true
+    } finally { setUploading(false) }
+  }
+
+  return (
+    <Modal
+      title={mc ? 'Modifier l\'entrée' : 'Nouvelle entrée'}
+      confirmLabel={uploading ? 'Enregistrement…' : mc ? 'Enregistrer' : 'Créer'}
+      confirmDisabled={uploading}
+      onClose={onSaved}
+      onConfirm={save}
+    >
+      <Alert message={error} />
+
+      {/* Stand — étape 1 */}
+      <div className="form-group" style={{ position: 'relative' }}>
+        <label>Stand <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>(optionnel)</span></label>
+        <input
+          value={standSearch}
+          onChange={e => { setStandSearch(e.target.value); setStandId('') }}
+          placeholder="Rechercher par numéro ou nom d'exposant…"
+          autoComplete="off"
+        />
+        {standSearch && !standId && (() => {
+          const q = standSearch.toLowerCase()
+          const filtered = stands.filter(s =>
+            s.numero.toLowerCase().includes(q) ||
+            (s.nom_exposant ?? '').toLowerCase().includes(q)
+          )
+          return filtered.length > 0 ? (
+            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxHeight: 200, overflowY: 'auto', top: '100%', left: 0 }}>
+              {filtered.map(s => (
+                <div key={s.id}
+                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
+                  onMouseDown={() => { setStandId(s.id); setStandSearch(`${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`) }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                >
+                  <strong>{s.numero}</strong>{s.nom_exposant ? ` — ${s.nom_exposant}` : ''}
+                  {s.hall ? <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11 }}>Hall {s.hall}</span> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px', fontSize: 13, color: 'var(--text-muted)', width: '100%', top: '100%', left: 0 }}>
+              Aucun stand trouvé
+            </div>
+          )
+        })()}
+        {standId && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ Stand sélectionné</span>
+            <button type="button" style={{ fontSize: 11, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }} onClick={() => { setStandId(''); setStandSearch('') }}>
+              ✕ Dissocier
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 16px' }} />
+
+      {/* Titre */}
+      <div className="form-group">
+        <label>Titre <span style={{ color: 'var(--danger)' }}>*</span></label>
+        <input value={titre} onChange={e => setTitre(e.target.value)} placeholder="Ex : Mobilier manquant hall B" />
+      </div>
+
+      {/* Descriptif */}
+      <div className="form-group">
+        <label>Descriptif</label>
+        <textarea
+          value={descriptif}
+          onChange={e => setDescriptif(e.target.value)}
+          placeholder="Décrivez l'incident ou l'observation…"
+          rows={3}
+          style={{ resize: 'vertical' }}
+        />
+      </div>
+
+      {/* Photos */}
+      <div className="form-group">
+        <label>Photos</label>
+        {(existingPhotos.length > 0 || newPhotoUrls.length > 0) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {existingPhotos.map(p => (
+              <div key={p.id} style={{ position: 'relative' }}>
+                <img src={p.url} alt="" onClick={() => setLightbox(p.url)}
+                  style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} />
+                <button onClick={() => deleteExistingPhoto(p.id)}
+                  style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: 10, cursor: 'pointer', lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+            ))}
+            {newPhotoUrls.map((url, i) => (
+              <div key={i} style={{ position: 'relative' }}>
+                <img src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '2px dashed var(--accent)' }} />
+                <button onClick={() => setNewPhotos(prev => prev.filter((_, j) => j !== i))}
+                  style={{ position: 'absolute', top: -4, right: -4, background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: 10, cursor: 'pointer', lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {('ontouchstart' in window || navigator.maxTouchPoints > 0) ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ cursor: 'pointer' }}>
+              <span className="btn btn-secondary btn-sm">📷 Appareil photo</span>
+              <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) setNewPhotos(prev => [...prev, ...f]) }} />
+            </label>
+            <label style={{ cursor: 'pointer' }}>
+              <span className="btn btn-secondary btn-sm">🖼 Galerie</span>
+              <input type="file" accept="image/*" multiple style={{ display: 'none' }}
+                onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) setNewPhotos(prev => [...prev, ...f]) }} />
+            </label>
+          </div>
+        ) : (
+          <input type="file" accept="image/*" multiple
+            onChange={e => setNewPhotos(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
+        )}
+      </div>
+
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
+          <img src={lightbox} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8 }} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// ── Onglet ─────────────────────────────────────────────────────────────────────
+
+export function TabMainCourante({ ev }: { ev: Evenement }) {
+  const [entries, setEntries] = useState<MainCourante[]>([])
+  const [modal, setModal] = useState<MainCourante | null | 'new'>(null)
+  const [exportFn, setExportFn] = useState<(() => void) | null>(null)
+  const { notify, toastEl } = useToast()
+
+  async function load() {
+    const { data, error } = await sb.from('main_courante')
+      .select('*, stands(numero, nom_exposant), users(nom, prenom), main_courante_photos(id, url)')
+      .eq('evenement_id', ev.id)
+      .order('created_at', { ascending: false })
+    if (error) { notify(error.message, 'error'); return }
+    setEntries(
+      (data ?? []).map(e => ({
+        ...e,
+        photos: (e.main_courante_photos as { id: string; url: string }[]) ?? [],
+      })) as MainCourante[]
+    )
+  }
+
+  useEffect(() => { load() }, [ev.id])
+
+  async function deleteEntry(mc: MainCourante) {
+    if (!confirm(`Supprimer "${mc.titre}" ?`)) return
+    const { error } = await sb.from('main_courante').delete().eq('id', mc.id)
+    if (error) { notify(error.message, 'error'); return }
+    await load()
+  }
+
+  const standLabel = (mc: MainCourante) =>
+    mc.stands ? `${mc.stands.numero}${mc.stands.nom_exposant ? ` — ${mc.stands.nom_exposant}` : ''}` : ''
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">Main courante <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({entries.length})</span></div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ExportButton onClick={exportFn} />
+            <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouvelle entrée</button>
+          </div>
+        </div>
+        <div className="card-body">
+          <DataTable
+            data={entries}
+            exportFilename={`main-courante-${ev.nom}`}
+            onExportReady={fn => setExportFn(() => fn)}
+            onRowClick={mc => setModal(mc)}
+            emptyState={<div className="empty-state">Aucune entrée dans la main courante.</div>}
+            columns={[
+              {
+                key: 'stand', label: 'Stand', sortable: true, filterable: true,
+                getValue: standLabel,
+                render: mc => mc.stands
+                  ? <span style={{ fontWeight: 600 }}>{standLabel(mc)}</span>
+                  : <span className="text-muted">—</span>,
+              },
+              {
+                key: 'titre', label: 'Titre', sortable: true, filterable: true,
+                render: mc => <span style={{ fontWeight: 600 }}>{mc.titre}</span>,
+              },
+              {
+                key: 'descriptif', label: 'Descriptif', filterable: true, hideOnMobile: true,
+                render: mc => mc.descriptif
+                  ? <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{mc.descriptif.length > 80 ? mc.descriptif.slice(0, 80) + '…' : mc.descriptif}</span>
+                  : <span className="text-muted">—</span>,
+              },
+              {
+                key: 'photos', label: 'Photos', hideOnMobile: true,
+                getValue: mc => String(mc.photos?.length ?? 0),
+                render: mc => mc.photos?.length
+                  ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>📷 {mc.photos.length}</span>
+                  : null,
+              },
+              {
+                key: 'created_at', label: 'Date', sortable: true, hideOnMobile: true,
+                getValue: mc => mc.created_at,
+                render: mc => <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDateHeure(mc.created_at)}</span>,
+              },
+              {
+                key: 'by', label: 'Par', sortable: true, hideOnMobile: true,
+                getValue: mc => mc.users ? `${mc.users.prenom} ${mc.users.nom}` : '',
+                render: mc => mc.users
+                  ? <span style={{ fontSize: 12 }}>{mc.users.prenom} {mc.users.nom}</span>
+                  : <span className="text-muted">—</span>,
+              },
+              {
+                key: 'actions', label: '',
+                render: mc => (
+                  <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); deleteEntry(mc) }}>
+                    Supprimer
+                  </button>
+                ),
+              },
+            ]}
+          />
+        </div>
+      </div>
+
+      {modal !== null && (
+        <McForm mc={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />
+      )}
+      {toastEl}
+    </>
+  )
+}
