@@ -657,7 +657,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
       const prestaId = raisonSociale ? prestaMap[raisonSociale.toLowerCase()] : null
       if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${numStand}" introuvable`); return }
       if (raisonSociale && !prestaId) { erreurs.push(`Ligne ${i + 2} : prestataire "${raisonSociale}" introuvable`); return }
-      toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: parseInt(String(r.quantite)) || 1, emplacement_prevu: (r.emplacement as string) || null, prestataire_id: prestaId })
+      toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: parseInt(String(r.quantite)) || 1, emplacement_prevu: (r.position as string) || null, prestataire_id: prestaId })
     })
 
     if (erreurs.length) setError(`${erreurs.length} ligne(s) ignorée(s) : ${erreurs.slice(0, 5).join(' · ')}`)
@@ -677,7 +677,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
         ↓ Télécharger le modèle Excel
       </button>
       <ImportZone
-        expectedCols={['numero_stand', 'libelle', 'categorie', 'quantite', 'emplacement', 'raison_sociale_prestataire']}
+        expectedCols={['numero_stand', 'libelle', 'categorie', 'quantite', 'position', 'raison_sociale_prestataire']}
         onRows={setRows}
       />
     </Modal>

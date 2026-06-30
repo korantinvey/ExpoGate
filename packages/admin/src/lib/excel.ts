@@ -13,7 +13,7 @@ const TEMPLATES = {
   prestations: {
     filename: 'modele_prestations.xlsx',
     sheetName: 'Prestations',
-    headers: ['numero_stand', 'libelle', 'categorie', 'quantite', 'emplacement', 'raison_sociale_prestataire'],
+    headers: ['numero_stand', 'libelle', 'categorie', 'quantite', 'position', 'raison_sociale_prestataire'],
     example: [
       ['A12', 'Mange-debout haut', 'Mobilier', 4, 'Fond de stand', 'Carpentier Décoration SARL'],
       ['A12', 'Spot LED orientable', 'Éclairage', 6, '', 'Elec Events'],
