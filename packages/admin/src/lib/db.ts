@@ -29,6 +29,7 @@ export interface LocalPrestation {
   quantite_attendue: number
   emplacement_prevu: string | null
   ajout_sur_site: boolean
+  commentaire_prestataire: string | null
   statut_conformite: ControleStatut | null
   quantite_constatee: number | null
   commentaire: string | null

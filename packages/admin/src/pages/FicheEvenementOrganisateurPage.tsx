@@ -443,14 +443,21 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
   async function save(): Promise<boolean> {
     setUploading(true)
     try {
-      const { data: { user } } = await sb.auth.getUser()
+      const isOffline = !navigator.onLine
 
       if (readOnly) {
-        // Mode prestataire : seuls le statut et le commentaire prestataire sont modifiables
         if (!prest?.id) return false
-        const payload: Record<string, unknown> = {
-          commentaire_prestataire: commentairePrestataire || null,
+        if (isOffline) {
+          const now = new Date().toISOString()
+          await db.prestations.update(prest.id, {
+            commentaire_prestataire: commentairePrestataire || null,
+            ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, date_controle: now } : {}),
+            pending_sync: 1,
+          })
+          onSaved(); return true
         }
+        const { data: { user } } = await sb.auth.getUser()
+        const payload: Record<string, unknown> = { commentaire_prestataire: commentairePrestataire || null }
         if (cStatut) {
           payload.statut_conformite = cStatut
           payload.quantite_constatee = cQte !== '' ? parseInt(cQte) : null
@@ -473,6 +480,29 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
 
       if (!libelle || !standId) { setError('Le stand et le libellé sont obligatoires.'); return false }
       if (!prestaId) { setError('Un prestataire doit être affecté.'); return false }
+
+      if (isOffline) {
+        if (!prest?.id) { setError('Création de prestation non disponible hors ligne.'); return false }
+        const now = new Date().toISOString()
+        await db.prestations.update(prest.id, {
+          stand_id: standId,
+          libelle,
+          categorie: categorie || null,
+          quantite_attendue: qte,
+          emplacement_prevu: emplacement || null,
+          prestataire_id: prestaId || null,
+          ajout_sur_site: ajoutSurSite,
+          commentaire_prestataire: commentairePrestataire || null,
+          ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
+          pending_sync: 1,
+        })
+        for (const file of newPhotos) {
+          await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
+        }
+        onSaved(); return true
+      }
+
+      const { data: { user } } = await sb.auth.getUser()
       const conformitePayload = cStatut ? {
         statut_conformite: cStatut,
         quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
@@ -502,11 +532,7 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
         const { data: { session } } = await sb.auth.getSession()
         fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-non-conformite`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
           body: JSON.stringify({ prestation_id: savedId }),
         }).catch(() => {})
       }
