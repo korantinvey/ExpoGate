@@ -346,6 +346,7 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
     const serverEntries = (data ?? []).map(e => ({
       ...e,
       photos: (e.main_courante_photos as { id: string; url: string }[]) ?? [],
+      pending_sync: 0 as const,
     })) as MainCourante[]
 
     // Récupérer les IDs encore en attente de sync
@@ -440,7 +441,15 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
               },
               {
                 key: 'titre', label: 'Titre', sortable: true, filterable: true,
-                render: mc => <span style={{ fontWeight: 600 }}>{mc.titre}</span>,
+                render: mc => (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      title={mc.pending_sync === 1 ? 'En attente de synchronisation' : 'Synchronisé'}
+                      style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: mc.pending_sync === 1 ? '#f97316' : '#22c55e' }}
+                    />
+                    <span style={{ fontWeight: 600 }}>{mc.titre}</span>
+                  </span>
+                ),
               },
               {
                 key: 'etat', label: 'État', sortable: true, filterable: true,

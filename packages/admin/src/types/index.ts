@@ -88,6 +88,7 @@ export interface MainCourante {
   etat: McEtat
   created_at: string
   created_by: string | null
+  pending_sync?: 0 | 1
   // Jointures
   stands?: Pick<Stand, 'numero' | 'nom_exposant'> | null
   users?: Pick<User, 'nom' | 'prenom'> | null
