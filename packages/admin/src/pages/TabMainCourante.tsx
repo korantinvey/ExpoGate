@@ -381,13 +381,19 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    const onOnline = async () => {
-      await syncPending()
-      await load()
-    }
+    const onOnline = async () => { await syncPending(); await load() }
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
   }, [load])
+
+  useEffect(() => {
+    const channel = sb.channel(`mc_${ev.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'main_courante', filter: `evenement_id=eq.${ev.id}` },
+        () => { load() }
+      )
+      .subscribe()
+    return () => { sb.removeChannel(channel) }
+  }, [load, ev.id])
 
   async function deleteEntry(mc: MainCourante) {
     if (!confirm(`Supprimer "${mc.titre}" ?`)) return
