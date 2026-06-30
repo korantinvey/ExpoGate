@@ -417,7 +417,6 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands }: { prest: 
 
   async function save(): Promise<boolean> {
     if (!libelle || !standId) { setError('Le stand et le libellé sont obligatoires.'); return false }
-    if (!prestaId) { setError('Un prestataire doit être affecté.'); return false }
     setUploading(true)
     try {
       const { data: { user } } = await sb.auth.getUser()

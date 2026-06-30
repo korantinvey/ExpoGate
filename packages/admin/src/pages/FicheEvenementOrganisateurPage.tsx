@@ -480,7 +480,6 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
       }
 
       if (!libelle || !standId) { setError('Le stand et le libellé sont obligatoires.'); return false }
-      if (!prestaId) { setError('Un prestataire doit être affecté.'); return false }
 
       if (isOffline) {
         if (!prest?.id) { setError('Création de prestation non disponible hors ligne.'); return false }
