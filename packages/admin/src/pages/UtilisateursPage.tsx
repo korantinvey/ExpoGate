@@ -127,10 +127,61 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
   )
 }
 
+function DevicesModal({ user, onClose, notify }: { user: User; onClose: () => void; notify: (msg: string, type?: 'success' | 'error') => void }) {
+  const [subs, setSubs] = useState<{ endpoint: string; created_at: string }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    sbAdmin.from('push_subscriptions').select('endpoint, created_at').eq('user_id', user.id).order('created_at', { ascending: false })
+      .then(({ data }) => { setSubs(data ?? []); setLoading(false) })
+  }, [user.id])
+
+  function browserLabel(endpoint: string) {
+    if (/googleapis|fcm/.test(endpoint)) return 'Chrome / Android'
+    if (/mozilla|firefox/.test(endpoint)) return 'Firefox'
+    if (/apple/.test(endpoint)) return 'Safari'
+    if (/microsoft|edge/.test(endpoint)) return 'Edge'
+    return 'Navigateur'
+  }
+
+  async function revoke(endpoint: string) {
+    const { error } = await sbAdmin.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', endpoint)
+    if (error) { notify(error.message, 'error'); return }
+    notify('Abonnement supprimé', 'success')
+    setSubs(prev => prev.filter(s => s.endpoint !== endpoint))
+  }
+
+  return (
+    <Modal title={`Appareils — ${user.prenom} ${user.nom}`} confirmLabel="Fermer" onClose={onClose} onConfirm={() => { onClose(); return Promise.resolve(true) }}>
+      {loading ? (
+        <div className="text-muted">Chargement…</div>
+      ) : subs.length === 0 ? (
+        <div className="text-muted">Aucun appareil push enregistré pour cet utilisateur.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {subs.map(s => (
+            <div key={s.endpoint} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{browserLabel(s.endpoint)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Enregistré le {new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{s.endpoint}</div>
+              </div>
+              <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => revoke(s.endpoint)}>Révoquer</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export function UtilisateursPage() {
   const [users, setUsers] = useState<User[]>([])
   const [modal, setModal] = useState<User | null | 'new'>(null)
   const [pushModal, setPushModal] = useState<User | null>(null)
+  const [devicesModal, setDevicesModal] = useState<User | null>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const { notify, toastEl } = useToast()
 
@@ -182,6 +233,7 @@ export function UtilisateursPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(u.email) }}>Invitation</button>
                   <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setPushModal(u) }}>🔔 Notifier</button>
+                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setDevicesModal(u) }}>Appareils</button>
                 </div>
               )},
             ]}
@@ -193,6 +245,7 @@ export function UtilisateursPage() {
         <UserForm user={modal === 'new' ? null : modal} onSaved={() => { setModal(null); load() }} />
       )}
       {pushModal && <PushModal user={pushModal} onClose={() => setPushModal(null)} notify={notify} />}
+      {devicesModal && <DevicesModal user={devicesModal} onClose={() => setDevicesModal(null)} notify={notify} />}
       {toastEl}
     </>
   )
