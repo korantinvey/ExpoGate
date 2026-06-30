@@ -24,7 +24,7 @@ function AppRoutes() {
   const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
   const { standalone, canPrompt, isIos, isAndroid, hasNativePrompt, triggerInstall, inBrowserAfterInstall } = useInstallPrompt()
 
-  const [installDismissed, setInstallDismissed] = useState(() => localStorage.getItem('install_banner_dismissed') === '1')
+  const [installDismissed, setInstallDismissed] = useState(false)
   const [useAppDismissed, setUseAppDismissed] = useState(() => localStorage.getItem('use_app_dismissed') === '1')
   const [pushDismissed, setPushDismissed] = useState(() => localStorage.getItem('push_banner_dismissed') === '1')
 
@@ -33,7 +33,7 @@ function AppRoutes() {
   const showUseAppBanner = inBrowserAfterInstall && !useAppDismissed && !showInstallBanner
   const showPushBanner = supported && permission === 'default' && !pushDismissed && !showInstallBanner && !showUseAppBanner
 
-  function dismissInstall() { localStorage.setItem('install_banner_dismissed', '1'); setInstallDismissed(true) }
+  function dismissInstall() { setInstallDismissed(true) }
   function dismissUseApp() { localStorage.setItem('use_app_dismissed', '1'); setUseAppDismissed(true) }
   function dismissPush() { localStorage.setItem('push_banner_dismissed', '1'); setPushDismissed(true) }
 
