@@ -378,7 +378,13 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
     if (toCache.length) await db.main_courante.bulkPut(toCache)
   }, [ev.id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const init = async () => {
+      if (navigator.onLine) await syncPending()
+      await load()
+    }
+    init()
+  }, [load])
 
   useEffect(() => {
     const onOnline = async () => { await syncPending(); await load() }
