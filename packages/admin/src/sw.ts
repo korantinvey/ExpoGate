@@ -16,26 +16,24 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 self.addEventListener('push', event => {
   const data = event.data ? Promise.resolve(event.data.json()).catch(() => ({})) : Promise.resolve({})
   event.waitUntil(
-    data.then((d: { title?: string; body?: string; url?: string; message_id?: string }) =>
+    data.then((d: { title?: string; body?: string; url?: string }) =>
       self.registration.showNotification(d.title ?? 'Expogate', {
         body: d.body ?? 'Vous avez un nouveau message',
         icon: '/pwa-192x192.png',
         badge: '/pwa-64x64.png',
-        data: { url: d.url ?? '/', message_id: d.message_id ?? null },
+        data: { url: d.url ?? '/' },
       })
     )
   )
 })
 
 self.addEventListener('notificationclick', event => {
-  const messageId = event.notification.data?.message_id as string | null
   event.notification.close()
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       if (clients.length > 0) {
-        clients[0].focus().then(client => {
+        clients[0].focus().then(() => {
           setTimeout(() => {
-            if (messageId) client.postMessage({ type: 'PUSH_CLICKED', messageId })
             const bc = new BroadcastChannel('notif')
             bc.postMessage('OPEN_NOTIFICATIONS')
             setTimeout(() => bc.close(), 500)
@@ -43,7 +41,7 @@ self.addEventListener('notificationclick', event => {
         })
         return
       }
-      return self.clients.openWindow(`/?push_clicked=${messageId ?? ''}`)
+      return self.clients.openWindow('/')
     })
   )
 })
