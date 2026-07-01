@@ -187,12 +187,19 @@ Deno.serve(async (req) => {
     const msgTitle = `${statutLabel} — ${presta.libelle}`
     const msgBody = `Stand ${standInfo} · ${evenementNom}${presta.commentaire ? ` — ${presta.commentaire}` : ''}`
 
-    // In-app messages (un par user)
-    for (const u of destinataires) {
-      await sbAdmin.from('messages').insert({ user_id: u.id, title: msgTitle, body: msgBody })
+    // In-app messages (un par user) — récupère les IDs pour les passer au push
+    const { data: insertedMsgs } = await sbAdmin
+      .from('messages')
+      .insert(destinataires.map(u => ({ user_id: u.id, title: msgTitle, body: msgBody })))
+      .select('id, user_id')
+
+    // Map user_id → message_id pour le suivi des push vues
+    const messageIds: Record<string, string> = {}
+    for (const msg of insertedMsgs ?? []) {
+      messageIds[msg.user_id] = msg.id
     }
 
-    // Push notification groupée
+    // Push notification groupée avec IDs de messages pour le suivi
     const userIds = destinataires.map(u => u.id)
     await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push-notification`, {
       method: 'POST',
@@ -201,7 +208,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         'apikey': Deno.env.get('SUPABASE_ANON_KEY')!,
       },
-      body: JSON.stringify({ user_ids: userIds, title: msgTitle, body: msgBody }),
+      body: JSON.stringify({ user_ids: userIds, title: msgTitle, body: msgBody, message_ids: messageIds }),
     }).catch(() => {})
 
     return new Response(JSON.stringify({ sent: true, notified: destinataires.length }), {

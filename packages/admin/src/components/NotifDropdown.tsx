@@ -69,9 +69,20 @@ export function NotifDropdown({ unread, messages, markAllRead }: Props) {
                     background: m.lu ? 'transparent' : 'var(--accent-light, #f0fdf4)',
                   }}>
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{m.title}</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>{m.body}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>{m.body}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {m.push_vu_at ? (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#16a34a', background: '#dcfce7', borderRadius: 4, padding: '1px 6px' }} title={`Notification push vue le ${new Date(m.push_vu_at).toLocaleString('fr-FR')}`}>
+                          Push vue
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--border)', borderRadius: 4, padding: '1px 6px' }}>
+                          Push non vue
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -108,8 +108,9 @@ async function signVapid(audience: string): Promise<string> {
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
-  const { user_ids, title, body, url } = await req.json() as {
+  const { user_ids, title, body, url, message_ids } = await req.json() as {
     user_ids: string[]; title: string; body: string; url?: string
+    message_ids?: Record<string, string>  // user_id → message_id
   }
 
   const sbAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
@@ -123,7 +124,8 @@ Deno.serve(async req => {
     try {
       const origin = new URL(sub.endpoint).origin
       const jwt = await signVapid(origin)
-      const payload = JSON.stringify({ title, body, url: url ?? '/' })
+      const messageId = message_ids?.[sub.user_id]
+      const payload = JSON.stringify({ title, body, url: url ?? '/', message_id: messageId ?? null })
       const encryptedBody = await encryptPayload(payload, sub.p256dh, sub.auth)
 
       const res = await fetch(sub.endpoint, {
