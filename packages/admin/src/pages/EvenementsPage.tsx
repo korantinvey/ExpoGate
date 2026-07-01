@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
-import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
-import { DataTable } from '../components/ui/DataTable'
-import { ExportButton } from '../components/ui/ExportButton'
 import { DateInput } from '../components/ui/DateInput'
 import { fmtDate } from '../lib/format'
 import type { Evenement, EvenementStatut } from '../types'
+
+const STATUT_LABEL: Record<string, string> = {
+  parametrage: 'Paramétrage',
+  actif: 'Actif',
+  termine: 'Terminé',
+}
 
 function EvenementForm({ ev, onSaved }: { ev: Evenement | null; onSaved: () => void }) {
   const [nom, setNom] = useState(ev?.nom ?? '')
@@ -71,8 +74,8 @@ export function EvenementsPage() {
   const navigate = useNavigate()
   const [events, setEvents] = useState<Evenement[]>([])
   const [filter, setFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [modal, setModal] = useState<Evenement | null | 'new'>(null)
-  const [exportFn, setExportFn] = useState<(() => void) | null>(null)
 
   async function load() {
     let q = sb.from('evenements').select('*').order('date_debut', { ascending: false })
@@ -83,6 +86,15 @@ export function EvenementsPage() {
 
   useEffect(() => { load() }, [filter])
 
+  const displayed = useMemo(() => {
+    if (!search.trim()) return events
+    const q = search.trim().toLowerCase()
+    return events.filter(e =>
+      e.nom.toLowerCase().includes(q) ||
+      (e.lieu ?? '').toLowerCase().includes(q)
+    )
+  }, [events, search])
+
   return (
     <>
       <div className="page-header">
@@ -90,41 +102,48 @@ export function EvenementsPage() {
         <div className="page-subtitle">Créer et gérer les salons</div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">{events.length} événement{events.length > 1 ? 's' : ''}</div>
-          <div className="flex gap-2">
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {[{ v: '', l: 'Tous' }, { v: 'parametrage', l: 'Paramétrage' }, { v: 'actif', l: 'Actif' }, { v: 'termine', l: 'Terminé' }].map(({ v, l }) => (
-                <button key={v} onClick={() => setFilter(v)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 20, border: '1px solid var(--border)', cursor: 'pointer', background: filter === v ? 'var(--accent)' : 'var(--surface)', color: filter === v ? '#fff' : 'var(--text)', fontWeight: filter === v ? 600 : 400 }}>{l}</button>
-              ))}
-            </div>
-            <ExportButton onClick={exportFn} />
-            <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Nouvel événement</button>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <input
+          type="search"
+          placeholder="Rechercher un événement…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: '1 1 200px', minWidth: 180, maxWidth: 360, padding: '7px 12px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface)', color: 'var(--text)' }}
+        />
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {[{ v: '', l: 'Tous' }, { v: 'parametrage', l: 'Paramétrage' }, { v: 'actif', l: 'Actif' }, { v: 'termine', l: 'Terminé' }].map(({ v, l }) => (
+            <button key={v} onClick={() => setFilter(v)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 20, border: '1px solid var(--border)', cursor: 'pointer', background: filter === v ? 'var(--accent)' : 'var(--surface)', color: filter === v ? '#fff' : 'var(--text)', fontWeight: filter === v ? 600 : 400 }}>{l}</button>
+          ))}
         </div>
-        <div className="card-body" style={{ overflowX: 'auto' }}>
-          <DataTable
-            data={events}
-            exportFilename="evenements"
-            onExportReady={fn => setExportFn(() => fn)}
-            onRowClick={e => navigate(`/evenements/${e.id}`)}
-            emptyState={
-              <div className="empty-state">
-                <div className="empty-icon">◈</div>
-                <div>Aucun événement trouvé</div>
-                <div className="mt-4"><button className="btn btn-primary" onClick={() => setModal('new')}>Créer un événement</button></div>
-              </div>
-            }
-            columns={[
-              { key: 'nom', label: 'Nom', sortable: true, filterable: true, render: e => <span style={{ fontWeight: 600 }}>{e.nom}</span> },
-              { key: 'lieu', label: 'Lieu', sortable: true, filterable: true, hideOnMobile: true },
-              { key: 'dates', label: 'Dates', hideOnMobile: true, getValue: e => `${e.date_debut} ${e.date_fin}`, render: e => `${fmtDate(e.date_debut)} → ${fmtDate(e.date_fin)}` },
-              { key: 'statut', label: 'Statut', sortable: true, filterable: true, options: [{ value: 'parametrage', label: 'Paramétrage' }, { value: 'actif', label: 'Actif' }, { value: 'termine', label: 'Terminé' }], render: e => <Badge statut={e.statut} /> },
-            ]}
-          />
-        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => setModal('new')} style={{ marginLeft: 'auto' }}>+ Nouvel événement</button>
       </div>
+
+      {displayed.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">◈</div>
+          <div>Aucun événement trouvé</div>
+          <div className="mt-4"><button className="btn btn-primary" onClick={() => setModal('new')}>Créer un événement</button></div>
+        </div>
+      ) : (
+        <div className="events-grid">
+          {displayed.map(ev => (
+            <div
+              key={ev.id}
+              className="event-card"
+              onClick={() => navigate(`/evenements/${ev.id}`)}
+            >
+              <div className="event-card-header">
+                <div className="event-card-title">{ev.nom}</div>
+                <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
+              </div>
+              <div className="event-card-meta">
+                {ev.lieu && <span>📍 {ev.lieu}</span>}
+                <span>📅 {fmtDate(ev.date_debut)} → {fmtDate(ev.date_fin)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {modal !== null && (
         <EvenementForm
