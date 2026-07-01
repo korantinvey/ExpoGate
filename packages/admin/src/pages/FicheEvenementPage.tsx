@@ -4,6 +4,7 @@ import { sb, sbAdmin } from '../lib/supabase'
 import { getPendingPrestaIds, getPendingStandIds } from '../lib/db'
 import { SyncDot } from '../components/ui/SyncDot'
 import { ImportButton } from '../components/ui/ImportButton'
+import { InvitationModal } from '../components/ui/InvitationModal'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -788,12 +789,6 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
 
 type Notify = (msg: string, type?: 'success' | 'error') => void
 
-async function sendInvite(email: string, notify: Notify) {
-  if (!email) return
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
-  if (error) notify(`Erreur : ${error.message}`, 'error')
-  else notify(`Email d'invitation envoyé à ${email}`, 'success')
-}
 
 async function impersonate(email: string, notify: Notify) {
   if (!email) return
@@ -968,6 +963,7 @@ function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: RoleLoca
   const [acces, setAcces] = useState<UserEvenement[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<UserEvenement | null>(null)
+  const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const { notify, toastEl } = useToast()
 
@@ -1015,7 +1011,7 @@ function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: RoleLoca
               ...(isPresta ? [{ key: 'prestataire', label: 'Société', sortable: true, filterable: true, getValue: (a: UserEvenement) => a.prestataires?.raison_sociale ?? '' }] : []),
               { key: 'actions', label: '', render: (a: UserEvenement) => (
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(a.users?.email ?? '', notify) }}>Invitation</button>
+                  <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setInviting({ email: a.users?.email ?? '', userId: a.user_id }) }}>Invitation</button>
                   <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); impersonate(a.users?.email ?? '', notify) }}>Voir en tant que</button>
                   <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); revoke(a.id) }}>Révoquer</button>
                 </div>
@@ -1030,6 +1026,9 @@ function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: RoleLoca
       )}
       {editing && (
         <EditAccesModal acces={editing} onClose={() => { setEditing(null); load() }} />
+      )}
+      {inviting && (
+        <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />
       )}
       {toastEl}
     </>
@@ -1048,6 +1047,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
   const [membres, setMembres] = useState<UserEvenement[]>([])
   const [addModal, setAddModal] = useState(false)
   const [editingMembre, setEditingMembre] = useState<UserEvenement | null>(null)
+  const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [infoError, setInfoError] = useState('')
   const { notify, toastEl } = useToast()
 
@@ -1120,7 +1120,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
                     <td style={{ color: 'var(--text-muted)' }}>{m.users?.email}</td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: 6 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); sendInvite(m.users?.email ?? '', notify) }}>Invitation</button>
+                        <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setInviting({ email: m.users?.email ?? '', userId: m.user_id }) }}>Invitation</button>
                         <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); impersonate(m.users?.email ?? '', notify) }}>Voir en tant que</button>
                         <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); revokeMembre(m.id) }}>Retirer</button>
                       </div>
@@ -1146,6 +1146,9 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
           membre={editingMembre}
           onClose={() => { setEditingMembre(null); loadMembres() }}
         />
+      )}
+      {inviting && (
+        <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />
       )}
       {toastEl}
     </>
