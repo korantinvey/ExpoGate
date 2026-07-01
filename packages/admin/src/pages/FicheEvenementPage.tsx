@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { sb, sbAdmin } from '../lib/supabase'
 import { getPendingPrestaIds, getPendingStandIds } from '../lib/db'
 import { SyncDot } from '../components/ui/SyncDot'
+import { ImportButton } from '../components/ui/ImportButton'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -285,7 +286,7 @@ function TabStands({ ev }: { ev: Evenement }) {
           <div className="card-title">{stands.length} stand{stands.length > 1 ? 's' : ''}</div>
           <div className="flex gap-2">
             <ExportButton onClick={exportFn} />
-            <button className="btn btn-secondary btn-sm" onClick={() => setImporting(true)}>Importer</button>
+            <ImportButton onClick={() => setImporting(true)} />
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Stand</button>
           </div>
         </div>
@@ -733,7 +734,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
           <div className="card-title">{prestations.length} prestation{prestations.length > 1 ? 's' : ''}</div>
           <div className="flex gap-2">
             <ExportButton onClick={exportFn} />
-            <button className="btn btn-secondary btn-sm" onClick={() => setImporting(true)}>Importer</button>
+            <ImportButton onClick={() => setImporting(true)} />
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>+ Prestation</button>
           </div>
         </div>

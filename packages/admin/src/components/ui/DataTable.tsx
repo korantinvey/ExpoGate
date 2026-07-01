@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { ArrowUp, ArrowDown, ArrowUpDown, Filter, FilterX } from 'lucide-react'
 
 const isMobile = () => window.innerWidth <= 768
 
@@ -152,13 +153,15 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
                   {col.sortable ? (
                     <button onClick={() => toggleSort(col.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {col.label}
-                      <span style={{ fontSize: 10, opacity: sortKey === col.key ? 1 : 0.3 }}>{sortKey === col.key && sortDir === 'desc' ? '▼' : '▲'}</span>
+                      {sortKey === col.key && sortDir === 'asc' && <ArrowUp size={12} />}
+                      {sortKey === col.key && sortDir === 'desc' && <ArrowDown size={12} />}
+                      {sortKey !== col.key && <ArrowUpDown size={12} style={{ opacity: 0.3 }} />}
                     </button>
                   ) : <span>{col.label}</span>}
                   {col.filterable && (
                     <button onClick={e => { e.stopPropagation(); setOpenFilter(openFilter === col.key ? null : col.key) }} title="Filtrer"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 3px', borderRadius: 4, lineHeight: 1, fontSize: 12, color: isFiltered ? 'var(--accent)' : 'var(--text-muted)', backgroundColor: isFiltered ? 'var(--accent-light)' : 'transparent' }}>
-                      {isFiltered ? '⊘' : '⌕'}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 3px', borderRadius: 4, lineHeight: 1, display: 'inline-flex', color: isFiltered ? 'var(--accent)' : 'var(--text-muted)', backgroundColor: isFiltered ? 'var(--accent-light)' : 'transparent' }}>
+                      {isFiltered ? <FilterX size={13} /> : <Filter size={13} />}
                     </button>
                   )}
                 </div>

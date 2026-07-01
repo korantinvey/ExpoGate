@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
+import { UploadCloud } from 'lucide-react'
 
 interface Props {
   expectedCols: string[]
@@ -78,7 +79,7 @@ export function ImportZone({ expectedCols, colLabels, onRows }: Props) {
         onDragLeave={() => setDragging(false)}
         onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handle(f) }}
       >
-        <div className="import-icon">↑</div>
+        <div className="import-icon"><UploadCloud size={32} strokeWidth={1.5} /></div>
         <div className="import-text">
           Glissez votre fichier Excel ou CSV ici, ou <strong>cliquez pour choisir</strong>
         </div>
