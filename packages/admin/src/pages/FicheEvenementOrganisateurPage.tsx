@@ -81,7 +81,7 @@ function TabDetails({ ev, onEdit }: { ev: Evenement; onEdit: () => void }) {
 }
 
 // ── Stand modal ───────────────────────────────────────────────────────────────
-function StandForm({ stand, evenementId, onSaved }: { stand: Stand | null; evenementId: string; onSaved: () => void }) {
+function StandForm({ stand, evenementId, onSaved, canDelete = false }: { stand: Stand | null; evenementId: string; onSaved: () => void; canDelete?: boolean }) {
   const [exposant, setExposant] = useState(stand?.nom_exposant ?? '')
   const [hall, setHall] = useState(stand?.hall ?? '')
   const [numero, setNumero] = useState(stand?.numero ?? '')
@@ -106,8 +106,16 @@ function StandForm({ stand, evenementId, onSaved }: { stand: Stand | null; evene
     onSaved(); return true
   }
 
+  async function softDelete() {
+    if (!confirm(`Supprimer le stand ${stand!.numero} ? Il sera placé dans la corbeille et pourra être restauré.`)) return
+    await sb.from('stands').update({ deleted: true }).eq('id', stand!.id)
+    onSaved()
+  }
+
   return (
-    <Modal title={stand ? 'Modifier le stand' : 'Nouveau stand'} confirmLabel={stand ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}>
+    <Modal title={stand ? 'Modifier le stand' : 'Nouveau stand'} confirmLabel={stand ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
+      footer={canDelete && stand ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={softDelete}>Supprimer</button> : undefined}
+    >
       <Alert message={error} />
       <div className="grid-2">
         <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Exposant</label><input value={exposant} onChange={e => setExposant(e.target.value)} /></div>
@@ -333,10 +341,10 @@ function TabStands({ ev }: { ev: Evenement }) {
           />
         </div>
       </div>
-      {modal !== null && <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />}
+      {modal !== null && <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete />}
       {importing && <ImportStandsModal evenementId={ev.id} nomEvenement={ev.nom} onDone={() => { setImporting(false); load() }} />}
       {viewingPrestations && !editingPrestation && <StandPrestationsModal stand={viewingPrestations} onClose={() => setViewingPrestations(null)} onEditPrestation={p => setEditingPrestation(p)} />}
-      {editingPrestation && <PrestationForm prest={editingPrestation} evenementId={ev.id} onSaved={() => { setEditingPrestation(null); load() }} onGoToStands={() => setEditingPrestation(null)} />}
+      {editingPrestation && <PrestationForm prest={editingPrestation} evenementId={ev.id} onSaved={() => { setEditingPrestation(null); load() }} onGoToStands={() => setEditingPrestation(null)} canDelete />}
     </>
   )
 }
@@ -359,7 +367,7 @@ function conformiteBg(statut: ControleStatut | null | undefined): { background: 
 }
 
 // ── Prestation modal ──────────────────────────────────────────────────────────
-function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = false }: { prest: Prestation | null; evenementId: string; onSaved: () => void; onGoToStands: () => void; readOnly?: boolean }) {
+function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = false, canDelete = false }: { prest: Prestation | null; evenementId: string; onSaved: () => void; onGoToStands: () => void; readOnly?: boolean; canDelete?: boolean }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
   const [standId, setStandId] = useState(prest?.stand_id ?? '')
@@ -560,7 +568,9 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
   const roStyle: React.CSSProperties = { background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'not-allowed' }
 
   return (
-    <Modal title={prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}>
+    <Modal title={prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
+      footer={canDelete && prest ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={async () => { if (!confirm(`Supprimer "${prest.libelle}" ? Elle sera placée dans la corbeille.`)) return; await sb.from('prestations').update({ deleted: true }).eq('id', prest.id); onSaved() }}>Supprimer</button> : undefined}
+    >
       <Alert message={error} />
       <div className="form-group" style={{ position: 'relative' }}>
         <label>Stand</label>
@@ -845,7 +855,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
           />
         </div>
       </div>
-      {modal !== null && <PrestationForm prest={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} onGoToStands={() => { setModal(null); onGoToStands() }} />}
+      {modal !== null && <PrestationForm prest={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} onGoToStands={() => { setModal(null); onGoToStands() }} canDelete />}
       {importing && <ImportPrestationsModal evenementId={ev.id} onDone={() => { setImporting(false); load() }} />}
     </>
   )
@@ -1215,7 +1225,7 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
       </Modal>
       {addModal && <AddUserToEventModal evenementId={evenementId} forcedRole="prestataire" forcedPrestaId={prestataire.id} onClose={() => { setAddModal(false); loadMembres() }} />}
       {editingMembre && <EditMembreModal membre={editingMembre} onClose={() => { setEditingMembre(null); loadMembres() }} />}
-      {editingPrestation && <PrestationForm readOnly prest={editingPrestation} evenementId={evenementId} onSaved={() => { setEditingPrestation(null); loadPrestations() }} onGoToStands={() => setEditingPrestation(null)} />}
+      {editingPrestation && <PrestationForm readOnly prest={editingPrestation} evenementId={evenementId} onSaved={() => { setEditingPrestation(null); loadPrestations() }} onGoToStands={() => setEditingPrestation(null)} canDelete />}
       {inviting && <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />}
       {toastEl}
     </>
@@ -1483,7 +1493,7 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
-      {tab === 'main_courante' && <TabMainCourante ev={ev} />}
+      {tab === 'main_courante' && <TabMainCourante ev={ev} canDelete />}
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); onReload() }} />}
     </>

@@ -42,7 +42,7 @@ function fmtDateHeure(s: string) {
 
 // ── Formulaire ─────────────────────────────────────────────────────────────────
 
-function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; evenementId: string; onSaved: () => void }) {
+function McForm({ mc, evenementId, onSaved, canDelete = false }: { mc: MainCourante | null; evenementId: string; onSaved: () => void; canDelete?: boolean }) {
   const { user } = useAuth()
   const [stands, setStands] = useState<LocalStand[]>([])
   const [standId, setStandId] = useState(mc?.stand_id ?? '')
@@ -171,6 +171,15 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
     } finally { setUploading(false) }
   }
 
+  async function deleteEntry() {
+    if (!confirm(`Supprimer "${mc!.titre}" ?`)) return
+    if (!navigator.onLine) { setError('Suppression non disponible hors ligne.'); return }
+    const { error } = await sb.from('main_courante').delete().eq('id', mc!.id)
+    if (error) { setError(error.message); return }
+    await db.main_courante.delete(mc!.id)
+    onSaved()
+  }
+
   return (
     <Modal
       title={mc ? 'Modifier l\'entrée' : 'Nouvelle entrée'}
@@ -178,6 +187,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
       confirmDisabled={uploading}
       onClose={onSaved}
       onConfirm={save}
+      footer={canDelete && mc ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={deleteEntry}>Supprimer</button> : undefined}
     >
       <Alert message={error} />
 
@@ -309,7 +319,7 @@ function McForm({ mc, evenementId, onSaved }: { mc: MainCourante | null; eveneme
 
 // ── Onglet ─────────────────────────────────────────────────────────────────────
 
-export function TabMainCourante({ ev }: { ev: Evenement }) {
+export function TabMainCourante({ ev, canDelete = false }: { ev: Evenement; canDelete?: boolean }) {
   const [entries, setEntries] = useState<MainCourante[]>([])
   const [modal, setModal] = useState<MainCourante | null | 'new'>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
@@ -402,15 +412,6 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
     return () => { sb.removeChannel(channel) }
   }, [load, ev.id])
 
-  async function deleteEntry(mc: MainCourante) {
-    if (!confirm(`Supprimer "${mc.titre}" ?`)) return
-    if (!navigator.onLine) { notify('Suppression non disponible hors ligne.', 'error'); return }
-    const { error } = await sb.from('main_courante').delete().eq('id', mc.id)
-    if (error) { notify(error.message, 'error'); return }
-    await db.main_courante.delete(mc.id)
-    await load()
-  }
-
   const standLabel = (mc: MainCourante) =>
     mc.stands ? `${mc.stands.numero}${mc.stands.nom_exposant ? ` — ${mc.stands.nom_exposant}` : ''}` : ''
 
@@ -481,21 +482,13 @@ export function TabMainCourante({ ev }: { ev: Evenement }) {
                   ? <span style={{ fontSize: 12 }}>{mc.users.prenom} {mc.users.nom}</span>
                   : <span className="text-muted">—</span>,
               },
-              {
-                key: 'actions', label: '',
-                render: mc => (
-                  <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); deleteEntry(mc) }}>
-                    Supprimer
-                  </button>
-                ),
-              },
             ]}
           />
         </div>
       </div>
 
       {modal !== null && (
-        <McForm mc={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />
+        <McForm mc={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete={canDelete} />
       )}
       {toastEl}
     </>

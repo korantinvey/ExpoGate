@@ -1565,7 +1565,7 @@ export function FicheEvenementPage() {
       {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
-      {tab === 'main_courante' && <TabMainCourante ev={ev} />}
+      {tab === 'main_courante' && <TabMainCourante ev={ev} canDelete />}
       {tab === 'corbeille' && <TabCorbeille ev={ev} />}
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); load() }} />}
