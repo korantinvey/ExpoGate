@@ -170,6 +170,7 @@ function StandPrestationsModal({ stand, onClose, onEditPrestation }: { stand: St
         const { data } = await sb.from('prestations')
           .select('*, prestataires(raison_sociale)')
           .eq('stand_id', stand.id)
+          .eq('deleted', false)
           .order('libelle')
         if (data) setPrestations(data)
       } catch { /* données locales déjà affichées */ }
@@ -253,13 +254,13 @@ function TabStands({ ev }: { ev: Evenement }) {
     }
     // Network refresh
     try {
-      const { data: standsData, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
+      const { data: standsData, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
       if (error || !standsData) return
       const standIds = standsData.map(s => s.id)
       const prestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
       if (standIds.length) {
         const [{ data: prestsData }, pendingIds] = await Promise.all([
-          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds),
+          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false),
           getPendingStandIds(standIds),
         ])
         for (const row of prestsData ?? []) {
@@ -396,7 +397,7 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands, readOnly = 
       }
       try {
         const [{ data: s }, { data: p }] = await Promise.all([
-          sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero'),
+          sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
           sb.from('prestataires').select('*').order('raison_sociale'),
         ])
         if (s) {
@@ -711,7 +712,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
   async function doImport(): Promise<boolean> {
     if (!rows.length) { setError('Veuillez sélectionner un fichier.'); return false }
     const [{ data: stands }, { data: prestataires }] = await Promise.all([
-      sb.from('stands').select('id, numero, hall').eq('evenement_id', evenementId),
+      sb.from('stands').select('id, numero, hall').eq('evenement_id', evenementId).eq('deleted', false),
       sb.from('prestataires').select('id, raison_sociale'),
     ])
     const standMapFull = Object.fromEntries((stands ?? []).map(s => [`${String(s.hall ?? '').trim().toLowerCase()}|${String(s.numero).trim().toLowerCase()}`, s.id]))
@@ -781,13 +782,14 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
     await loadFromCache()
     // Rafraîchit depuis le réseau si disponible
     try {
-      const { data: stands, error: standsErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
+      const { data: stands, error: standsErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
       if (standsErr) throw standsErr
       const standIds = (stands ?? []).map(s => s.id)
       if (!standIds.length) { setPrestations([]); return }
       const { data, error } = await sb.from('prestations')
         .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
         .in('stand_id', standIds)
+        .eq('deleted', false)
         .order('libelle')
       if (!error && data) {
         setPrestations(data)
@@ -1098,12 +1100,13 @@ function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestat
   }
 
   async function loadPrestations() {
-    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', evenementId)
+    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', evenementId).eq('deleted', false)
     const standIds = (stands ?? []).map(s => s.id)
     if (!standIds.length) { setPrestations([]); setPendingSyncIds(new Set()); return }
     const { data } = await sb.from('prestations')
       .select('*, stands(numero, nom_exposant), users(nom, prenom)')
       .in('stand_id', standIds)
+      .eq('deleted', false)
       .eq('prestataire_id', prestataire.id)
       .order('libelle')
     if (data) {
@@ -1337,28 +1340,23 @@ function TabDashboard({ ev }: { ev: Evenement }) {
     async function load() {
       await loadFromCache()
       try {
-        type RawStand = { id: string; prestations: { statut_conformite: string | null }[] }
-        const { data, error: sErr } = await sb.from('stands')
-          .select('id, prestations(statut_conformite)')
-          .eq('evenement_id', ev.id)
+        const { data: standsRaw, error: sErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
         if (sErr) throw sErr
-        const stands = (data ?? []) as unknown as RawStand[]
-        if (!stands.length) {
+        const standIds = (standsRaw ?? []).map(s => s.id)
+        if (!standIds.length) {
           setStats({ nbStands: 0, total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0, non_controlees: 0, standsConforme: 0, standsAControler: 0, standsNonConforme: 0 })
           return
         }
-        const list = stands.flatMap(s => s.prestations)
-        const standsWithId = stands.map(s => ({ id: s.id }))
-        const prestsWithStandId = stands.flatMap(s => s.prestations.map(p => ({ stand_id: s.id, statut_conformite: p.statut_conformite })))
+        const prestsRaw = (await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false)).data ?? []
         setStats({
-          nbStands: stands.length,
-          total: list.length,
-          conforme: list.filter(p => p.statut_conformite === 'conforme').length,
-          non_conforme: list.filter(p => p.statut_conformite === 'non_conforme').length,
-          absent: list.filter(p => p.statut_conformite === 'absent').length,
-          a_verifier: list.filter(p => p.statut_conformite === 'a_verifier').length,
-          non_controlees: list.filter(p => !p.statut_conformite).length,
-          ...classifyStands(standsWithId, prestsWithStandId),
+          nbStands: standIds.length,
+          total: prestsRaw.length,
+          conforme: prestsRaw.filter(p => p.statut_conformite === 'conforme').length,
+          non_conforme: prestsRaw.filter(p => p.statut_conformite === 'non_conforme').length,
+          absent: prestsRaw.filter(p => p.statut_conformite === 'absent').length,
+          a_verifier: prestsRaw.filter(p => p.statut_conformite === 'a_verifier').length,
+          non_controlees: prestsRaw.filter(p => !p.statut_conformite).length,
+          ...classifyStands(standsRaw ?? [], prestsRaw),
         })
       } catch { /* données locales déjà affichées */ }
     }
@@ -1515,6 +1513,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
       const { data: prests } = await sb.from('prestations')
         .select('*, stands(*)')
         .eq('prestataire_id', acces.prestataire_id)
+        .eq('deleted', false)
       if (!prests) return
       const byStand = new Map<string, Stand & { prestations: Prestation[] }>()
       for (const p of prests) {

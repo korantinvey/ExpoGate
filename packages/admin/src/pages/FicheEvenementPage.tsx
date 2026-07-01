@@ -102,8 +102,16 @@ function StandForm({ stand, evenementId, onSaved }: { stand: Stand | null; evene
     onSaved(); return true
   }
 
+  async function softDelete() {
+    if (!confirm(`Supprimer le stand ${stand!.numero} ? Il sera placé dans la corbeille et pourra être restauré.`)) return
+    await sb.from('stands').update({ deleted: true }).eq('id', stand!.id)
+    onSaved()
+  }
+
   return (
-    <Modal title={stand ? 'Modifier le stand' : 'Nouveau stand'} confirmLabel={stand ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}>
+    <Modal title={stand ? 'Modifier le stand' : 'Nouveau stand'} confirmLabel={stand ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
+      footer={stand ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={softDelete}>Supprimer</button> : undefined}
+    >
       <Alert message={error} />
       <div className="grid-2">
         <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Exposant</label><input value={exposant} onChange={e => setExposant(e.target.value)} /></div>
@@ -160,6 +168,7 @@ function StandPrestationsModal({ stand, evenementId, onClose }: { stand: Stand; 
     sb.from('prestations')
       .select('*, prestataires(raison_sociale)')
       .eq('stand_id', stand.id)
+      .eq('deleted', false)
       .order('libelle')
       .then(({ data }) => setPrestations(data ?? []))
   }
@@ -235,13 +244,13 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [pendingStandIds, setPendingStandIds] = useState<Set<string>>(new Set())
 
   async function load() {
-    const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', ev.id).order('numero')
+    const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
     const rawStands = standsData ?? []
     const standIds = rawStands.map(s => s.id)
     const prestationsParStand: Record<string, { statut_conformite: string | null }[]> = {}
     if (standIds.length > 0) {
       const [{ data: p }, pendingIds] = await Promise.all([
-        sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds),
+        sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false),
         getPendingStandIds(standIds),
       ])
       for (const row of p ?? []) {
@@ -396,7 +405,7 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands }: { prest: 
 
   useEffect(() => {
     Promise.all([
-      sb.from('stands').select('*').eq('evenement_id', evenementId).order('numero'),
+      sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
       sb.from('prestataires').select('*').order('raison_sociale'),
     ]).then(([{ data: s }, { data: p }]) => {
       setStands(s ?? [])
@@ -508,7 +517,9 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands }: { prest: 
   }
 
   return (
-    <Modal title={prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}>
+    <Modal title={prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
+      footer={prest ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={async () => { if (!confirm(`Supprimer "${prest.libelle}" ? Elle sera placée dans la corbeille.`)) return; await sb.from('prestations').update({ deleted: true }).eq('id', prest.id); onSaved() }}>Supprimer</button> : undefined}
+    >
       <Alert message={error} />
       <div className="form-group" style={{ position: 'relative' }}>
         <label>Stand</label>
@@ -653,7 +664,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
   async function doImport(): Promise<boolean> {
     if (!rows.length) { setError('Veuillez sélectionner un fichier.'); return false }
     const [{ data: stands }, { data: prestataires }] = await Promise.all([
-      sb.from('stands').select('id, numero, hall').eq('evenement_id', evenementId),
+      sb.from('stands').select('id, numero, hall').eq('evenement_id', evenementId).eq('deleted', false),
       sb.from('prestataires').select('id, raison_sociale'),
     ])
     const standMapFull = Object.fromEntries((stands ?? []).map(s => [`${String(s.hall ?? '').trim().toLowerCase()}|${String(s.numero).trim().toLowerCase()}`, s.id]))
@@ -710,12 +721,13 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set())
 
   async function load() {
-    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id)
+    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
     const standIds = (stands ?? []).map(s => s.id)
     if (!standIds.length) { setPrestations([]); return }
     const { data } = await sb.from('prestations')
       .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
       .in('stand_id', standIds)
+      .eq('deleted', false)
       .order('libelle')
     if (data) {
       setPrestations(data)
@@ -1277,32 +1289,31 @@ function TabDashboard({ ev }: { ev: Evenement }) {
   } | null>(null)
 
   useEffect(() => {
-    type RawStand = { id: string; prestations: { statut_conformite: string | null }[] }
-    sb.from('stands')
-      .select('id, prestations(statut_conformite)')
-      .eq('evenement_id', ev.id)
-      .then(({ data }) => {
-        if (!data) return
-        const stands = data as unknown as RawStand[]
-        let standsConforme = 0, standsAControler = 0, standsNonConforme = 0
-        for (const stand of stands) {
-          const p = stand.prestations
-          if (p.some(x => x.statut_conformite === 'non_conforme' || x.statut_conformite === 'absent')) standsNonConforme++
-          else if (p.length > 0 && p.every(x => x.statut_conformite === 'conforme')) standsConforme++
-          else standsAControler++
-        }
-        const list = stands.flatMap(s => s.prestations)
-        setStats({
-          nbStands: stands.length,
-          total: list.length,
-          conforme: list.filter(p => p.statut_conformite === 'conforme').length,
-          non_conforme: list.filter(p => p.statut_conformite === 'non_conforme').length,
-          absent: list.filter(p => p.statut_conformite === 'absent').length,
-          a_verifier: list.filter(p => p.statut_conformite === 'a_verifier').length,
-          non_controlees: list.filter(p => !p.statut_conformite).length,
-          standsConforme, standsAControler, standsNonConforme,
-        })
+    async function load() {
+      const { data: standsRaw } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
+      const standIds = (standsRaw ?? []).map(s => s.id)
+      const prestsRaw = standIds.length
+        ? (await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false)).data ?? []
+        : []
+      let standsConforme = 0, standsAControler = 0, standsNonConforme = 0
+      for (const sid of standIds) {
+        const p = prestsRaw.filter(x => x.stand_id === sid)
+        if (p.some(x => x.statut_conformite === 'non_conforme' || x.statut_conformite === 'absent')) standsNonConforme++
+        else if (p.length > 0 && p.every(x => x.statut_conformite === 'conforme')) standsConforme++
+        else standsAControler++
+      }
+      setStats({
+        nbStands: standIds.length,
+        total: prestsRaw.length,
+        conforme: prestsRaw.filter(p => p.statut_conformite === 'conforme').length,
+        non_conforme: prestsRaw.filter(p => p.statut_conformite === 'non_conforme').length,
+        absent: prestsRaw.filter(p => p.statut_conformite === 'absent').length,
+        a_verifier: prestsRaw.filter(p => p.statut_conformite === 'a_verifier').length,
+        non_controlees: prestsRaw.filter(p => !p.statut_conformite).length,
+        standsConforme, standsAControler, standsNonConforme,
       })
+    }
+    load()
   }, [ev.id])
 
   if (!stats) return <div className="empty-state">Chargement…</div>
@@ -1392,8 +1403,121 @@ function TabDashboard({ ev }: { ev: Evenement }) {
   )
 }
 
+// ── Onglet Corbeille (admin) ──────────────────────────────────────────────────
+function TabCorbeille({ ev }: { ev: Evenement }) {
+  const [stands, setStands] = useState<Stand[]>([])
+  const [prestations, setPrestations] = useState<Prestation[]>([])
+  const [section, setSection] = useState<'stands' | 'prestations'>('stands')
+
+  async function load() {
+    const [{ data: deletedStands }, { data: activeStands }] = await Promise.all([
+      sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', true).order('numero'),
+      sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false),
+    ])
+    setStands(deletedStands ?? [])
+    const allStandIds = [
+      ...(deletedStands ?? []).map(s => s.id),
+      ...(activeStands ?? []).map(s => s.id),
+    ]
+    if (allStandIds.length) {
+      const { data: p } = await sb.from('prestations')
+        .select('*, stands(numero, nom_exposant)')
+        .in('stand_id', allStandIds)
+        .eq('deleted', true)
+        .order('libelle')
+      setPrestations(p ?? [])
+    } else {
+      setPrestations([])
+    }
+  }
+
+  async function restoreStand(id: string) {
+    await sb.from('stands').update({ deleted: false }).eq('id', id)
+    load()
+  }
+
+  async function restorePrestation(id: string) {
+    await sb.from('prestations').update({ deleted: false }).eq('id', id)
+    load()
+  }
+
+  useEffect(() => { load() }, [ev.id])
+
+  const nbStands = stands.length
+  const nbPrests = prestations.length
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title">Corbeille</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Les éléments supprimés peuvent être restaurés</div>
+      </div>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+        {([
+          { key: 'stands' as const, label: 'Stands', count: nbStands },
+          { key: 'prestations' as const, label: 'Prestations', count: nbPrests },
+        ]).map(({ key, label, count }) => (
+          <button key={key} onClick={() => setSection(key)} style={{
+            padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 14, fontWeight: section === key ? 600 : 400,
+            color: section === key ? 'var(--accent-dark)' : 'var(--text-muted)',
+            borderBottom: section === key ? '2px solid var(--accent-dark)' : '2px solid transparent',
+            marginBottom: -1,
+          }}>
+            {label} <span style={{ marginLeft: 4, fontSize: 12, background: count > 0 ? '#fee2e2' : 'var(--border)', color: count > 0 ? '#dc2626' : undefined, borderRadius: 10, padding: '1px 7px' }}>{count}</span>
+          </button>
+        ))}
+      </div>
+      <div className="card-body">
+        {section === 'stands' && (
+          stands.length === 0 ? (
+            <div className="empty-state">Aucun stand dans la corbeille.</div>
+          ) : (
+            <table style={{ width: '100%', fontSize: 14 }}>
+              <thead><tr><th>N°</th><th>Exposant</th><th>Hall</th><th></th></tr></thead>
+              <tbody>
+                {stands.map(s => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 600 }}>{s.numero}</td>
+                    <td>{s.nom_exposant ?? '—'}</td>
+                    <td>{s.hall ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => restoreStand(s.id)}>Restaurer</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+        {section === 'prestations' && (
+          prestations.length === 0 ? (
+            <div className="empty-state">Aucune prestation dans la corbeille.</div>
+          ) : (
+            <table style={{ width: '100%', fontSize: 14 }}>
+              <thead><tr><th>Libellé</th><th>Stand</th><th>Catégorie</th><th></th></tr></thead>
+              <tbody>
+                {prestations.map(p => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 600 }}>{p.libelle}</td>
+                    <td>{(p.stands as Stand | undefined)?.numero ?? '—'}</td>
+                    <td>{p.categorie ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => restorePrestation(p.id)}>Restaurer</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page principale FicheEvenement ────────────────────────────────────────────
-type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
+type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante' | 'corbeille'
 
 export function FicheEvenementPage() {
   const { id } = useParams<{ id: string }>()
@@ -1428,9 +1552,9 @@ export function FicheEvenementPage() {
       </div>
 
       <div className="tabs">
-        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs', 'main_courante'] as Tab[]).map(t => (
+        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs', 'main_courante', 'corbeille'] as Tab[]).map(t => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs', main_courante: 'Main courante' }[t]}
+            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs', main_courante: 'Main courante', corbeille: 'Corbeille' }[t]}
           </button>
         ))}
       </div>
@@ -1442,6 +1566,7 @@ export function FicheEvenementPage() {
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
       {tab === 'main_courante' && <TabMainCourante ev={ev} />}
+      {tab === 'corbeille' && <TabCorbeille ev={ev} />}
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); load() }} />}
     </>

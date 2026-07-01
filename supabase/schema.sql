@@ -73,8 +73,10 @@ create table public.stands (
   hall            text,
   surface         numeric,
   angles          int,
-  unique (evenement_id, numero)
+  deleted         boolean not null default false
 );
+-- Numéro unique seulement parmi les stands non supprimés
+create unique index stands_numero_not_deleted on public.stands(evenement_id, numero) where not deleted;
 
 -- ============================================================
 -- PRESTATIONS
@@ -94,7 +96,8 @@ create table public.prestations (
   quantite_constatee  int check (quantite_constatee >= 0),
   commentaire         text,
   controleur_id       uuid references public.users(id) on delete set null,
-  date_controle       timestamptz
+  date_controle       timestamptz,
+  deleted             boolean not null default false
 );
 
 -- ============================================================

@@ -40,7 +40,7 @@ export function DashboardPage() {
       sb.from('evenements').select('*', { count: 'exact', head: true }).eq('statut', 'actif'),
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('prestataires').select('*', { count: 'exact', head: true }),
-      sb.from('stands').select('*', { count: 'exact', head: true }),
+      sb.from('stands').select('*', { count: 'exact', head: true }).eq('deleted', false),
       sb.from('main_courante').select('*', { count: 'exact', head: true }),
       sb.from('main_courante').select('*', { count: 'exact', head: true }).in('etat', ['a_traiter', 'pris_en_charge']),
     ]).then(([ev, us, pr, st, mc, mco]) => {
@@ -55,11 +55,11 @@ export function DashboardPage() {
     })
 
     Promise.all([
-      sb.from('prestations').select('*', { count: 'exact', head: true }),
-      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('statut_conformite', 'conforme'),
-      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('statut_conformite', 'non_conforme'),
-      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('statut_conformite', 'absent'),
-      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('statut_conformite', 'a_verifier'),
+      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('deleted', false),
+      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('deleted', false).eq('statut_conformite', 'conforme'),
+      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('deleted', false).eq('statut_conformite', 'non_conforme'),
+      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('deleted', false).eq('statut_conformite', 'absent'),
+      sb.from('prestations').select('*', { count: 'exact', head: true }).eq('deleted', false).eq('statut_conformite', 'a_verifier'),
     ]).then(([tot, conf, nc, abs, av]) => {
       setConformite({
         total: tot.count ?? 0,

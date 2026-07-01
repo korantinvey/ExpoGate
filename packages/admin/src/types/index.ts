@@ -46,6 +46,7 @@ export interface Stand {
   numero: string
   surface: number | null
   angles: number | null
+  deleted?: boolean
 }
 
 export interface Prestation {
@@ -64,6 +65,7 @@ export interface Prestation {
   commentaire_prestataire: string | null
   controleur_id: string | null
   date_controle: string | null
+  deleted?: boolean
   // Jointures
   stands?: Pick<Stand, 'numero' | 'nom_exposant'>
   prestataires?: Pick<Prestataire, 'raison_sociale'>
