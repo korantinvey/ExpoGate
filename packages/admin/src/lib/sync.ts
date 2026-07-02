@@ -5,35 +5,23 @@ import { compressImage } from './compressImage'
 export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
   const [{ data: ev, error: evErr }, { data: stands, error: standsErr }] = await Promise.all([
     sb.from('evenements').select('id, nom, lieu, date_debut, date_fin, statut').eq('id', eventId).single(),
-    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).eq('deleted', false).order('numero'),
+    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).order('numero'),
   ])
   if (evErr || !ev) throw new Error(evErr?.message ?? 'Événement introuvable')
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
 
   const standIds = stands.map(s => s.id)
-  const [
-    { data: rawPrestations, error: prestsErr },
-    { data: rawMcs },
-  ] = await Promise.all([
-    standIds.length
-      ? sb.from('prestations')
-          .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, commentaire_prestataire, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
-          .in('stand_id', standIds)
-          .eq('deleted', false)
-      : Promise.resolve({ data: [], error: null }),
-    sb.from('main_courante')
-      .select('id, evenement_id, stand_id, titre, descriptif, etat, created_at, created_by')
-      .eq('evenement_id', eventId),
-  ])
+  const { data: rawPrestations, error: prestsErr } = standIds.length
+    ? await sb.from('prestations')
+        .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, commentaire_prestataire, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
+        .in('stand_id', standIds)
+    : { data: [], error: null }
   if (prestsErr) throw new Error(prestsErr.message)
   const prestations = rawPrestations ?? []
-  const mcs = rawMcs ?? []
 
-  await db.transaction('rw', [db.evenements, db.stands, db.prestations, db.main_courante], async () => {
+  await db.transaction('rw', [db.evenements, db.stands, db.prestations], async () => {
     await db.evenements.put({ ...ev, downloaded_at: new Date().toISOString(), role_local: role_local ?? null })
     await db.stands.bulkPut(stands)
-
-    // Prestations
     const pendingIds = new Set(
       await db.prestations.where('pending_sync').equals(1).primaryKeys()
     )
@@ -45,19 +33,6 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
     const localIds = await db.prestations.where('stand_id').anyOf(standIds).primaryKeys() as string[]
     const toDelete = localIds.filter(id => !serverIds.has(id) && !pendingIds.has(id))
     if (toDelete.length) await db.prestations.bulkDelete(toDelete)
-
-    // Main courante
-    const pendingMcIds = new Set(
-      await db.main_courante.where('pending_sync').equals(1).primaryKeys()
-    )
-    const mcsToWrite = mcs
-      .filter(mc => !pendingMcIds.has(mc.id))
-      .map(mc => ({ ...mc, pending_sync: 0 as const }))
-    if (mcsToWrite.length) await db.main_courante.bulkPut(mcsToWrite)
-    const serverMcIds = new Set(mcs.map(mc => mc.id))
-    const localMcIds = await db.main_courante.where('evenement_id').equals(eventId).primaryKeys() as string[]
-    const mcsToDelete = localMcIds.filter(id => !serverMcIds.has(id) && !pendingMcIds.has(id))
-    if (mcsToDelete.length) await db.main_courante.bulkDelete(mcsToDelete)
   })
 }
 

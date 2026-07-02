@@ -60,8 +60,6 @@ export function TabStands({ ev }: { ev: Evenement }) {
         setPendingStandIds(new Set())
       }
       setStands(standsData.map(s => categoriserStand(s, prestsByStand)))
-      // Mise à jour du cache local pour l'accès hors ligne
-      await db.stands.bulkPut(standsData.map(s => ({ id: s.id, evenement_id: s.evenement_id, nom_exposant: s.nom_exposant, hall: s.hall, numero: s.numero })))
     } catch { /* données locales déjà affichées */ }
   }
 

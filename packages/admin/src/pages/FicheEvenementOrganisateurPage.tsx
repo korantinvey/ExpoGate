@@ -4,7 +4,6 @@ import { sb } from '../lib/supabase'
 import { db, getPendingPrestaIds } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
-import { downloadEvent } from '../lib/sync'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -294,8 +293,6 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
   )
 }
 
-const REFRESH_THRESHOLD_MS = 30 * 60 * 1000
-
 export function FicheEvenementOrganisateurPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -311,14 +308,8 @@ export function FicheEvenementOrganisateurPage() {
         sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
       ])
       if (evErr) throw evErr
-      const resolvedRole = (accesData?.role_local as RoleLocal) ?? null
-      // Téléchargement synchrone avant affichage : garantit que Dexie est peuplé
-      // avant que les onglets ne montent, quel que soit l'onglet actif en premier
-      const local = await db.evenements.get(id)
-      const stale = !local?.downloaded_at || Date.now() - new Date(local.downloaded_at).getTime() > REFRESH_THRESHOLD_MS
-      if (stale) await downloadEvent(id, resolvedRole ?? undefined).catch(() => {})
       setEv(evData ?? null)
-      setRole(resolvedRole)
+      setRole((accesData?.role_local as RoleLocal) ?? null)
     } catch {
       const local = await db.evenements.get(id)
       if (local) {
