@@ -102,13 +102,13 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
         ))}
       </div>
 
-      {tab === 'dashboard' && <TabDashboard ev={ev} />}
-      {tab === 'details' && <TabDetails ev={ev} onEdit={() => setEditing(true)} />}
-      {tab === 'stands' && <TabStands ev={ev} />}
-      {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
-      {tab === 'prestataires' && <TabPrestataires ev={ev} />}
-      {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
-      {tab === 'main_courante' && <TabMainCourante ev={ev} canDelete />}
+      <div style={{ display: tab === 'dashboard' ? undefined : 'none' }}><TabDashboard ev={ev} /></div>
+      <div style={{ display: tab === 'details' ? undefined : 'none' }}><TabDetails ev={ev} onEdit={() => setEditing(true)} /></div>
+      <div style={{ display: tab === 'stands' ? undefined : 'none' }}><TabStands ev={ev} /></div>
+      <div style={{ display: tab === 'prestations' ? undefined : 'none' }}><TabPrestations ev={ev} onGoToStands={() => setTab('stands')} /></div>
+      <div style={{ display: tab === 'prestataires' ? undefined : 'none' }}><TabPrestataires ev={ev} /></div>
+      <div style={{ display: tab === 'utilisateurs' ? undefined : 'none' }}><TabUtilisateurs ev={ev} /></div>
+      <div style={{ display: tab === 'main_courante' ? undefined : 'none' }}><TabMainCourante ev={ev} canDelete /></div>
 
       {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); onReload() }} />}
     </>
