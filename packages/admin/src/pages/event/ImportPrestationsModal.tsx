@@ -10,12 +10,13 @@ import type { UnknownPresta } from './helpers'
 export function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; onDone: () => void }) {
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [error, setError] = useState('')
-  const [step, setStep] = useState<'upload' | 'resolve'>('upload')
+  const [step, setStep] = useState<'upload' | 'resolve' | 'done'>('upload')
   const [unknowns, setUnknowns] = useState<UnknownPresta[]>([])
   const [allPrestataires, setAllPrestataires] = useState<Prestataire[]>([])
   const [allStands, setAllStands] = useState<{ id: string; numero: string; hall: string | null }[]>([])
 
   async function doImport(): Promise<boolean> {
+    if (step === 'done') { onDone(); return true }
     return step === 'upload' ? handleUpload() : handleResolve()
   }
 
@@ -76,15 +77,19 @@ export function ImportPrestationsModal({ evenementId, onDone }: { evenementId: s
       if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${hallStand ? hallStand + ' / ' : ''}${numStand}" introuvable`); return }
       toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: Math.max(1, parseInt(String(r.quantite)) || 0), emplacement_prevu: (r.position as string) || null, prestataire_id: prestaId })
     })
-    if (erreurs.length) setError(`${erreurs.length} ligne(s) ignorée(s) : ${erreurs.slice(0, 5).join(' · ')}`)
-    if (!toInsert.length) { if (!erreurs.length) setError('Aucune ligne valide.'); return false }
+    if (!toInsert.length) { setError(erreurs.length ? `Aucune ligne valide. ${erreurs.slice(0, 5).join(' · ')}` : 'Aucune ligne valide.'); return false }
     const { error } = await sb.from('prestations').insert(toInsert)
     if (error) { setError(error.message); return false }
+    if (erreurs.length) {
+      setError(`${toInsert.length} prestation(s) importée(s). ${erreurs.length} ligne(s) ignorée(s) : ${erreurs.slice(0, 5).join(' · ')}`)
+      setStep('done')
+      return false
+    }
     onDone(); return true
   }
 
   return (
-    <Modal title="Importer les prestations" confirmLabel={step === 'resolve' ? 'Importer' : 'Continuer'} onClose={onDone} onConfirm={doImport}>
+    <Modal title="Importer les prestations" confirmLabel={step === 'done' ? 'Fermer' : step === 'resolve' ? 'Importer' : 'Continuer'} onClose={onDone} onConfirm={doImport}>
       <Alert message={error} />
       {step === 'upload' ? (
         <>
