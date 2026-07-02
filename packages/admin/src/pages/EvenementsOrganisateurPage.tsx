@@ -38,7 +38,7 @@ export function EvenementsOrganisateurPage() {
   useEffect(() => {
     if (!user) return
     async function loadFromCache() {
-      const localEvs = await db.evenements.filter(ev => !!ev.downloaded_at).toArray()
+      const localEvs = await db.evenements.filter(ev => ev.role_local != null).toArray()
       const liste = localEvs.map(ev => ({ ...ev, created_at: '', role_local: (ev.role_local ?? 'organisateur') as RoleLocal })) as EvenementAvecRole[]
       setEvenements(liste)
       await refreshSyncMap(liste.map(ev => ev.id))
@@ -66,6 +66,15 @@ export function EvenementsOrganisateurPage() {
         const roleMap = Object.fromEntries(acces.map(a => [a.evenement_id, a.role_local as RoleLocal]))
         const liste = evs.filter(ev => ev.statut !== 'parametrage').map(ev => ({ ...ev, role_local: roleMap[ev.id] }))
         setEvenements(liste)
+
+        // Stocker tous les événements en Dexie pour la liste offline (preserve downloaded_at)
+        const existingEvs = await db.evenements.bulkGet(liste.map(e => e.id))
+        await db.evenements.bulkPut(liste.map((ev, i) => ({
+          id: ev.id, nom: ev.nom, lieu: ev.lieu ?? null,
+          date_debut: ev.date_debut, date_fin: ev.date_fin, statut: ev.statut,
+          downloaded_at: existingEvs[i]?.downloaded_at ?? null,
+          role_local: ev.role_local,
+        })))
 
         await refreshSyncMap(liste.map(ev => ev.id))
 

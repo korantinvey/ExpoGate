@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
+import { db } from '../lib/db'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
 import { DateInput } from '../components/ui/DateInput'
@@ -78,10 +79,19 @@ export function EvenementsPage() {
   const [modal, setModal] = useState<Evenement | null | 'new'>(null)
 
   async function load() {
-    let q = sb.from('evenements').select('*').order('date_debut', { ascending: false })
-    if (filter) q = q.eq('statut', filter)
-    const { data } = await q
-    setEvents(data ?? [])
+    const localEvs = await db.evenements.toArray()
+    if (localEvs.length) {
+      let cached = localEvs as unknown as Evenement[]
+      if (filter) cached = cached.filter(e => e.statut === filter)
+      setEvents(cached.sort((a, b) => b.date_debut.localeCompare(a.date_debut)))
+    }
+    try {
+      let q = sb.from('evenements').select('*').order('date_debut', { ascending: false })
+      if (filter) q = q.eq('statut', filter)
+      const { data, error } = await q
+      if (error) throw error
+      setEvents(data ?? [])
+    } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [filter])
