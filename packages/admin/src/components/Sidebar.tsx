@@ -29,6 +29,15 @@ export function Sidebar({ open, onClose }: Props) {
             <span className="nav-icon">◉</span> Utilisateurs
           </NavLink>
         </nav>
+        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+          <div className="nav-section" style={{ marginBottom: 6 }}>À propos</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            <div>Expogate Admin</div>
+            {__BUILD_DATE__ && (
+              <div>Déployé le {new Date(__BUILD_DATE__).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+            )}
+          </div>
+        </div>
       </aside>
     </>
   )

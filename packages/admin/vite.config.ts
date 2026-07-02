@@ -1,7 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'child_process'
+
+const gitDate = (() => {
+  try { return execSync('git log -1 --format=%ci').toString().trim() } catch { return '' }
+})()
+
 export default defineConfig({
+  define: {
+    __BUILD_DATE__: JSON.stringify(gitDate),
+  },
   test: {
     environment: 'jsdom',
     globals: true,
