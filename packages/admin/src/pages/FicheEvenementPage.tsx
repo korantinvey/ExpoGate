@@ -697,7 +697,7 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
       const prestaId = raisonSociale ? prestaMap[raisonSociale.toLowerCase()] : null
       if (!standId) { erreurs.push(`Ligne ${i + 2} : stand "${hallStand ? hallStand + ' / ' : ''}${numStand}" introuvable`); return }
       if (raisonSociale && !prestaId) { erreurs.push(`Ligne ${i + 2} : prestataire "${raisonSociale}" introuvable`); return }
-      toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: parseInt(String(r.quantite)) || 1, emplacement_prevu: (r.position as string) || null, prestataire_id: prestaId })
+      toInsert.push({ stand_id: standId, libelle, categorie: (r.categorie as string) || null, quantite_attendue: Math.max(1, parseInt(String(r.quantite)) || 0), emplacement_prevu: (r.position as string) || null, prestataire_id: prestaId })
     })
 
     if (erreurs.length) setError(`${erreurs.length} ligne(s) ignorée(s) : ${erreurs.slice(0, 5).join(' · ')}`)
