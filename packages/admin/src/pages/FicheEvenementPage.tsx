@@ -246,6 +246,8 @@ function categoriserStand(stand: Stand, prestationsParStand: Record<string, { st
   return { ...stand, _statut: toutConforme ? 'valide' : 'a_valider' }
 }
 
+type BulkStandField = 'hall' | 'nom_exposant' | 'surface' | 'angles'
+
 function TabStands({ ev }: { ev: Evenement }) {
   const [stands, setStands] = useState<StandAvecStatut[]>([])
   const [modal, setModal] = useState<Stand | null | 'new'>(null)
@@ -254,6 +256,11 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const [sousOnglet, setSousOnglet] = useState<'a_valider' | 'valide' | 'tous'>('a_valider')
   const [pendingStandIds, setPendingStandIds] = useState<Set<string>>(new Set())
+  const [selectedStandIds, setSelectedStandIds] = useState<Set<string>>(new Set())
+  const [bulkField, setBulkField] = useState<BulkStandField>('hall')
+  const [bulkValue, setBulkValue] = useState('')
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const { notify: bulkNotify } = useToast()
 
   async function load() {
     const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
@@ -275,6 +282,22 @@ function TabStands({ ev }: { ev: Evenement }) {
   }
 
   useEffect(() => { load() }, [])
+
+  async function applyBulkStands() {
+    if (!selectedStandIds.size) return
+    setBulkApplying(true)
+    const patch: Record<string, unknown> = {}
+    if (bulkField === 'hall') patch.hall = bulkValue || null
+    else if (bulkField === 'nom_exposant') patch.nom_exposant = bulkValue || null
+    else if (bulkField === 'surface') patch.surface = bulkValue !== '' ? parseFloat(bulkValue) : null
+    else if (bulkField === 'angles') patch.angles = bulkValue !== '' ? parseInt(bulkValue) : null
+    const { error } = await sb.from('stands').update(patch).in('id', [...selectedStandIds])
+    setBulkApplying(false)
+    if (error) { bulkNotify(error.message, 'error'); return }
+    bulkNotify(`${selectedStandIds.size} stand${selectedStandIds.size > 1 ? 's' : ''} mis à jour`, 'success')
+    setSelectedStandIds(new Set())
+    load()
+  }
 
   const standsFiltrés = sousOnglet === 'tous' ? stands
     : sousOnglet === 'valide' ? stands.filter(s => s._statut === 'valide')
@@ -334,11 +357,40 @@ function TabStands({ ev }: { ev: Evenement }) {
           ))}
         </div>
         <div className="card-body">
+          {selectedStandIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(29,158,117,0.08)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)', whiteSpace: 'nowrap' }}>
+                {selectedStandIds.size} stand{selectedStandIds.size > 1 ? 's' : ''} sélectionné{selectedStandIds.size > 1 ? 's' : ''}
+              </span>
+              <span style={{ color: 'var(--border)' }}>|</span>
+              <select value={bulkField} onChange={e => { setBulkField(e.target.value as BulkStandField); setBulkValue('') }}
+                style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)' }}>
+                <option value="hall">Hall / Pavillon</option>
+                <option value="nom_exposant">Exposant</option>
+                <option value="surface">Surface (m²)</option>
+                <option value="angles">Angles</option>
+              </select>
+              {(bulkField === 'surface' || bulkField === 'angles') ? (
+                <input type="number" min={0} value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="Valeur…"
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, width: 90 }} />
+              ) : (
+                <input type="text" value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="Valeur…"
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, width: 150 }} />
+              )}
+              <button className="btn btn-primary btn-sm" onClick={applyBulkStands} disabled={bulkApplying}>
+                {bulkApplying ? '…' : 'Appliquer'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedStandIds(new Set())}>Désélectionner</button>
+            </div>
+          )}
           <DataTable
             data={standsFiltrés}
             exportFilename={`stands-${ev.nom}-${sousOnglet}`}
             onExportReady={fn => setExportFn(() => fn)}
             onRowClick={s => setModal(s)}
+            selectable
+            selectedIds={selectedStandIds}
+            onSelectionChange={setSelectedStandIds}
             emptyState={
               <div className="empty-state">
                 <div className="empty-icon">▦</div>
@@ -789,6 +841,8 @@ function ImportPrestationsModal({ evenementId, onDone }: { evenementId: string; 
   )
 }
 
+type BulkPrestaField = 'prestataire_id' | 'categorie' | 'emplacement_prevu' | 'ajout_sur_site'
+
 // ── Onglet Prestations ────────────────────────────────────────────────────────
 function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () => void }) {
   const [prestations, setPrestations] = useState<Prestation[]>([])
@@ -796,6 +850,12 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [importing, setImporting] = useState(false)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
   const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set())
+  const [selectedPrestaIds, setSelectedPrestaIds] = useState<Set<string>>(new Set())
+  const [bulkPrestaField, setBulkPrestaField] = useState<BulkPrestaField>('prestataire_id')
+  const [bulkPrestaValue, setBulkPrestaValue] = useState('')
+  const [bulkPrestaApplying, setBulkPrestaApplying] = useState(false)
+  const [bulkPrestataires, setBulkPrestataires] = useState<Prestataire[]>([])
+  const { notify: bulkNotify } = useToast()
 
   async function load() {
     const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
@@ -816,6 +876,25 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    sb.from('prestataires').select('*').order('raison_sociale').then(({ data }) => setBulkPrestataires(data ?? []))
+  }, [])
+
+  async function applyBulkPrestations() {
+    if (!selectedPrestaIds.size) return
+    setBulkPrestaApplying(true)
+    const patch: Record<string, unknown> = {}
+    if (bulkPrestaField === 'prestataire_id') patch.prestataire_id = bulkPrestaValue || null
+    else if (bulkPrestaField === 'categorie') patch.categorie = bulkPrestaValue || null
+    else if (bulkPrestaField === 'emplacement_prevu') patch.emplacement_prevu = bulkPrestaValue || null
+    else if (bulkPrestaField === 'ajout_sur_site') patch.ajout_sur_site = bulkPrestaValue === 'true'
+    const { error } = await sb.from('prestations').update(patch).in('id', [...selectedPrestaIds])
+    setBulkPrestaApplying(false)
+    if (error) { bulkNotify(error.message, 'error'); return }
+    bulkNotify(`${selectedPrestaIds.size} prestation${selectedPrestaIds.size > 1 ? 's' : ''} mise${selectedPrestaIds.size > 1 ? 's' : ''} à jour`, 'success')
+    setSelectedPrestaIds(new Set())
+    load()
+  }
 
   return (
     <>
@@ -829,12 +908,52 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
           </div>
         </div>
         <div className="card-body">
+          {selectedPrestaIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(29,158,117,0.08)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)', whiteSpace: 'nowrap' }}>
+                {selectedPrestaIds.size} prestation{selectedPrestaIds.size > 1 ? 's' : ''} sélectionné{selectedPrestaIds.size > 1 ? 'es' : 'e'}
+              </span>
+              <span style={{ color: 'var(--border)' }}>|</span>
+              <select value={bulkPrestaField} onChange={e => { setBulkPrestaField(e.target.value as BulkPrestaField); setBulkPrestaValue('') }}
+                style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)' }}>
+                <option value="prestataire_id">Prestataire affecté</option>
+                <option value="categorie">Catégorie</option>
+                <option value="emplacement_prevu">Emplacement prévu</option>
+                <option value="ajout_sur_site">Ajout sur site</option>
+              </select>
+              {bulkPrestaField === 'prestataire_id' && (
+                <select value={bulkPrestaValue} onChange={e => setBulkPrestaValue(e.target.value)}
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', maxWidth: 200 }}>
+                  <option value="">— Aucun prestataire —</option>
+                  {bulkPrestataires.map(p => <option key={p.id} value={p.id}>{p.raison_sociale}</option>)}
+                </select>
+              )}
+              {bulkPrestaField === 'ajout_sur_site' && (
+                <select value={bulkPrestaValue} onChange={e => setBulkPrestaValue(e.target.value)}
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)' }}>
+                  <option value="true">Oui (à facturer)</option>
+                  <option value="false">Non</option>
+                </select>
+              )}
+              {(bulkPrestaField === 'categorie' || bulkPrestaField === 'emplacement_prevu') && (
+                <input type="text" value={bulkPrestaValue} onChange={e => setBulkPrestaValue(e.target.value)} placeholder="Valeur…"
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, width: 150 }} />
+              )}
+              <button className="btn btn-primary btn-sm" onClick={applyBulkPrestations} disabled={bulkPrestaApplying}>
+                {bulkPrestaApplying ? '…' : 'Appliquer'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedPrestaIds(new Set())}>Désélectionner</button>
+            </div>
+          )}
           <DataTable
             data={prestations}
             exportFilename={`prestations-${ev.nom}`}
             onExportReady={fn => setExportFn(() => fn)}
             onRowClick={p => setModal(p)}
             rowStyle={p => conformiteBg(p.statut_conformite)}
+            selectable
+            selectedIds={selectedPrestaIds}
+            onSelectionChange={setSelectedPrestaIds}
             emptyState={<div className="empty-state"><div className="empty-icon">▤</div><div>Aucune prestation pour cet événement</div></div>}
             columns={[
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },

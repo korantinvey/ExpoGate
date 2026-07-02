@@ -25,6 +25,9 @@ interface Props<T> {
   emptyState?: React.ReactNode
   exportFilename?: string
   onExportReady?: (fn: () => void) => void
+  selectable?: boolean
+  selectedIds?: Set<string>
+  onSelectionChange?: (ids: Set<string>) => void
 }
 
 type SortDir = 'asc' | 'desc' | null
@@ -85,7 +88,7 @@ const popoverStyle: React.CSSProperties = {
   borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '8px', marginTop: 4,
 }
 
-export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady }: Props<T>) {
+export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady, selectable, selectedIds, onSelectionChange }: Props<T>) {
   const mobile = isMobile()
   const visibleColumns = useMemo(() => mobile ? columns.filter(c => !c.hideOnMobile) : columns, [columns, mobile])
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -93,6 +96,7 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
   const [textFilters, setTextFilters] = useState<Record<string, string>>({})
   const [pickFilters, setPickFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const headerCheckRef = useRef<HTMLInputElement>(null)
 
   // Stabiliser la référence columns pour ne pas retrigger processed/onExportReady à chaque render parent
   const columnsRef = useRef(columns)
@@ -140,10 +144,38 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processed, exportFilename])
 
+  const effectiveSelected = selectedIds ?? new Set<string>()
+  const filteredIds = useMemo(() => processed.map(r => (r as Record<string, unknown>).id as string).filter(Boolean), [processed])
+  const selectedInFiltered = filteredIds.filter(id => effectiveSelected.has(id)).length
+  const allFilteredSelected = filteredIds.length > 0 && selectedInFiltered === filteredIds.length
+  const someFilteredSelected = selectedInFiltered > 0 && !allFilteredSelected
+
+  useEffect(() => {
+    if (headerCheckRef.current) headerCheckRef.current.indeterminate = someFilteredSelected
+  }, [someFilteredSelected])
+
+  function handleToggleAll() {
+    if (!onSelectionChange) return
+    onSelectionChange(allFilteredSelected ? new Set() : new Set(filteredIds))
+  }
+
+  function handleToggleRow(id: string) {
+    if (!onSelectionChange) return
+    const next = new Set(effectiveSelected)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    onSelectionChange(next)
+  }
+
   return (
     <table>
       <thead>
         <tr>
+          {selectable && (
+            <th style={{ width: 36, textAlign: 'center', padding: '8px 4px' }}>
+              <input ref={headerCheckRef} type="checkbox" checked={allFilteredSelected} onChange={handleToggleAll}
+                style={{ cursor: 'pointer', width: 'auto', margin: 0 }} />
+            </th>
+          )}
           {visibleColumns.map(col => {
             const isPicklist = !!col.options
             const isFiltered = isPicklist ? (pickFilters[col.key]?.length ?? 0) > 0 : !!(textFilters[col.key]?.trim())
@@ -177,12 +209,21 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
       </thead>
       <tbody>
         {processed.length === 0 ? (
-          <tr><td colSpan={visibleColumns.length}>{emptyState ?? <div className="empty-state">Aucun résultat.</div>}</td></tr>
-        ) : processed.map((row, i) => (
-          <tr key={(row as Record<string, unknown>).id as string ?? i} onClick={() => onRowClick?.(row)} style={{ ...(onRowClick ? { cursor: 'pointer' } : {}), ...rowStyle?.(row) }}>
-            {visibleColumns.map(col => <td key={col.key}>{col.render ? col.render(row) : getVal(row, col) || '—'}</td>)}
-          </tr>
-        ))}
+          <tr><td colSpan={visibleColumns.length + (selectable ? 1 : 0)}>{emptyState ?? <div className="empty-state">Aucun résultat.</div>}</td></tr>
+        ) : processed.map((row, i) => {
+          const rowId = (row as Record<string, unknown>).id as string
+          return (
+            <tr key={rowId ?? i} onClick={() => onRowClick?.(row)} style={{ ...(onRowClick ? { cursor: 'pointer' } : {}), ...rowStyle?.(row) }}>
+              {selectable && (
+                <td style={{ width: 36, textAlign: 'center', padding: '8px 4px' }} onClick={e => e.stopPropagation()}>
+                  <input type="checkbox" checked={effectiveSelected.has(rowId)} onChange={() => handleToggleRow(rowId)}
+                    style={{ cursor: 'pointer', width: 'auto', margin: 0 }} />
+                </td>
+              )}
+              {visibleColumns.map(col => <td key={col.key}>{col.render ? col.render(row) : getVal(row, col) || '—'}</td>)}
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
