@@ -101,7 +101,7 @@ function StandForm({ stand, evenementId, onSaved, canDelete = false }: { stand: 
     }
     const { error } = stand
       ? await sb.from('stands').update(payload).eq('id', stand.id)
-      : await sb.from('stands').upsert(payload, { onConflict: 'evenement_id,numero' })
+      : await sb.from('stands').insert(payload)
     if (error) { setError(error.message); return false }
     onSaved(); return true
   }
@@ -144,8 +144,20 @@ function ImportStandsModal({ evenementId, nomEvenement, onDone }: { evenementId:
       angles: r.angles != null && r.angles !== '' ? parseInt(String(r.angles)) : null,
     })).filter(r => r.numero)
     if (!payload.length) { setError('Aucune ligne valide (colonne "numero" requise).'); return false }
-    const { error } = await sb.from('stands').upsert(payload, { onConflict: 'evenement_id,numero' })
-    if (error) { setError(error.message); return false }
+
+    const { data: existing } = await sb.from('stands').select('id, numero').eq('evenement_id', evenementId).eq('deleted', false)
+    const existingByNumero = new Map((existing ?? []).map(s => [s.numero, s.id]))
+    const toInsert = payload.filter(r => !existingByNumero.has(r.numero))
+    const toUpdate = payload.filter(r => existingByNumero.has(r.numero))
+
+    if (toInsert.length) {
+      const { error } = await sb.from('stands').insert(toInsert)
+      if (error) { setError(error.message); return false }
+    }
+    for (const row of toUpdate) {
+      const { error } = await sb.from('stands').update(row).eq('id', existingByNumero.get(row.numero)!)
+      if (error) { setError(error.message); return false }
+    }
     onDone(); return true
   }
 
@@ -153,12 +165,12 @@ function ImportStandsModal({ evenementId, nomEvenement, onDone }: { evenementId:
     <Modal title={`Importer les stands — ${nomEvenement}`} confirmLabel="Importer" onClose={onDone} onConfirm={doImport}>
       <Alert message={error} />
       <p className="text-muted" style={{ marginBottom: 12 }}>
-        Colonnes attendues : <strong>numero</strong>, nom_exposant, hall, surface, angles.
+        Colonnes attendues : <strong>Numéro de stand</strong>, nom_exposant, hall, surface, angles.
       </p>
       <button className="btn btn-secondary btn-sm" style={{ marginBottom: 16 }} onClick={() => downloadTemplate('stands')}>
         ↓ Télécharger le modèle Excel
       </button>
-      <ImportZone expectedCols={['nom_exposant', 'hall', 'numero', 'surface', 'angles']} onRows={setRows} />
+      <ImportZone expectedCols={['nom_exposant', 'hall', 'numero', 'surface', 'angles']} colLabels={{ numero: 'Numéro de stand' }} onRows={setRows} />
     </Modal>
   )
 }
