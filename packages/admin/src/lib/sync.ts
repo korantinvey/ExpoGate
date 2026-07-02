@@ -5,7 +5,7 @@ import { compressImage } from './compressImage'
 export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
   const [{ data: ev, error: evErr }, { data: stands, error: standsErr }] = await Promise.all([
     sb.from('evenements').select('id, nom, lieu, date_debut, date_fin, statut').eq('id', eventId).single(),
-    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).order('numero'),
+    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).eq('deleted', false).order('numero'),
   ])
   if (evErr || !ev) throw new Error(evErr?.message ?? 'Événement introuvable')
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
@@ -15,6 +15,7 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
     ? await sb.from('prestations')
         .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, commentaire_prestataire, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
         .in('stand_id', standIds)
+        .eq('deleted', false)
     : { data: [], error: null }
   if (prestsErr) throw new Error(prestsErr.message)
   const prestations = rawPrestations ?? []
