@@ -311,13 +311,14 @@ export function FicheEvenementOrganisateurPage() {
         sb.from('user_evenements').select('role_local').eq('evenement_id', id).eq('user_id', user.id).single(),
       ])
       if (evErr) throw evErr
-      setEv(evData ?? null)
       const resolvedRole = (accesData?.role_local as RoleLocal) ?? null
-      setRole(resolvedRole)
-      // Téléchargement silencieux pour le mode hors ligne
+      // Téléchargement synchrone avant affichage : garantit que Dexie est peuplé
+      // avant que les onglets ne montent, quel que soit l'onglet actif en premier
       const local = await db.evenements.get(id)
       const stale = !local?.downloaded_at || Date.now() - new Date(local.downloaded_at).getTime() > REFRESH_THRESHOLD_MS
-      if (stale) downloadEvent(id, resolvedRole ?? undefined).catch(() => {})
+      if (stale) await downloadEvent(id, resolvedRole ?? undefined).catch(() => {})
+      setEv(evData ?? null)
+      setRole(resolvedRole)
     } catch {
       const local = await db.evenements.get(id)
       if (local) {
