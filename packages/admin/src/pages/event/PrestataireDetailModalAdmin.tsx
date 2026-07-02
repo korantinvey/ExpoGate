@@ -1,0 +1,141 @@
+import { useEffect, useState } from 'react'
+import { sb, sbAdmin } from '../../lib/supabase'
+import { Modal } from '../../components/ui/Modal'
+import { Alert } from '../../components/ui/Alert'
+import { InvitationModal } from '../../components/ui/InvitationModal'
+import { useToast } from '../../components/ui/Toast'
+import type { Prestataire, UserEvenement } from '../../types'
+import { AddUserToEventModal } from './AddUserToEventModalAdmin'
+import { EditMembreModal } from './EditMembreModal'
+
+type Notify = (msg: string, type?: 'success' | 'error') => void
+
+async function impersonate(email: string, notify: Notify) {
+  if (!email) return
+  const { data, error } = await sbAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+    options: { redirectTo: window.location.origin },
+  })
+  if (error || !data.properties?.action_link) {
+    notify(`Erreur : ${error?.message ?? 'lien non généré'}`, 'error')
+    return
+  }
+  await navigator.clipboard.writeText(data.properties.action_link)
+  notify("Lien copié — ouvrez-le dans une fenêtre privée (le coller dans la barre d'adresse)", 'success')
+}
+
+export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { prestataire: Prestataire; evenementId: string; onClose: () => void }) {
+  const [nom, setNom] = useState(prestataire.raison_sociale)
+  const [email, setEmail] = useState(prestataire.email_contact ?? '')
+  const [tel, setTel] = useState(prestataire.telephone ?? '')
+  const [membres, setMembres] = useState<UserEvenement[]>([])
+  const [addModal, setAddModal] = useState(false)
+  const [editingMembre, setEditingMembre] = useState<UserEvenement | null>(null)
+  const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
+  const [infoError, setInfoError] = useState('')
+  const { notify, toastEl } = useToast()
+
+  async function loadMembres() {
+    const { data } = await sb.from('user_evenements')
+      .select('*, users(nom, prenom, email)')
+      .eq('evenement_id', evenementId)
+      .eq('prestataire_id', prestataire.id)
+    setMembres(data ?? [])
+  }
+
+  useEffect(() => { loadMembres() }, [])
+
+  async function saveInfo(): Promise<boolean> {
+    if (!nom) { setInfoError('La raison sociale est obligatoire.'); return false }
+    const { error } = await sb.from('prestataires')
+      .update({ raison_sociale: nom, email_contact: email || null, telephone: tel || null })
+      .eq('id', prestataire.id)
+    if (error) { setInfoError(error.message); return false }
+    onClose(); return true
+  }
+
+  async function revokeMembre(id: string) {
+    if (!confirm('Retirer ce membre ?')) return
+    const { error } = await sb.from('user_evenements').delete().eq('id', id)
+    if (error) { notify(error.message, 'error'); return }
+    await loadMembres()
+  }
+
+  async function retirerDeLEvenement() {
+    if (!confirm(`Retirer "${prestataire.raison_sociale}" de cet événement ?\n\nTous ses membres seront révoqués. Les prestations associées resteront mais sans accès utilisateur.`)) return
+    const { error } = await sb.from('user_evenements')
+      .delete()
+      .eq('evenement_id', evenementId)
+      .eq('prestataire_id', prestataire.id)
+    if (error) { notify(error.message, 'error'); return }
+    onClose()
+  }
+
+  return (
+    <>
+      <Modal title={prestataire.raison_sociale} confirmLabel="Enregistrer" onClose={onClose} onConfirm={saveInfo}
+        footer={
+          <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={retirerDeLEvenement}>
+            Retirer de l'événement
+          </button>
+        }
+      >
+        <Alert message={infoError} />
+        <div className="form-group"><label>Raison sociale</label><input value={nom} onChange={e => setNom(e.target.value)} /></div>
+        <div className="grid-2">
+          <div className="form-group"><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div className="form-group"><label>Téléphone</label><input value={tel} onChange={e => setTel(e.target.value)} /></div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Membres sur cet événement</div>
+            <button className="btn btn-primary btn-sm" onClick={() => setAddModal(true)}>+ Ajouter</button>
+          </div>
+          {membres.length === 0 ? (
+            <div className="text-muted" style={{ fontSize: 13 }}>Aucun membre pour cet événement.</div>
+          ) : (
+            <table style={{ width: '100%', fontSize: 13 }}>
+              <thead><tr><th>Nom</th><th>Email</th><th></th></tr></thead>
+              <tbody>
+                {membres.map(m => (
+                  <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => setEditingMembre(m)}>
+                    <td style={{ fontWeight: 600 }}>{m.users?.prenom} {m.users?.nom}</td>
+                    <td style={{ color: 'var(--text-muted)' }}>{m.users?.email}</td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setInviting({ email: m.users?.email ?? '', userId: m.user_id }) }}>Invitation</button>
+                        <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); impersonate(m.users?.email ?? '', notify) }}>Voir en tant que</button>
+                        <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); revokeMembre(m.id) }}>Retirer</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Modal>
+
+      {addModal && (
+        <AddUserToEventModal
+          evenementId={evenementId}
+          forcedRole="prestataire"
+          forcedPrestaId={prestataire.id}
+          onClose={() => { setAddModal(false); loadMembres() }}
+        />
+      )}
+      {editingMembre && (
+        <EditMembreModal
+          membre={editingMembre}
+          onClose={() => { setEditingMembre(null); loadMembres() }}
+        />
+      )}
+      {inviting && (
+        <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />
+      )}
+      {toastEl}
+    </>
+  )
+}
