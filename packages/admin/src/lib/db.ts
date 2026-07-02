@@ -107,6 +107,9 @@ export async function getPendingPrestaIds(ids: string[]): Promise<Set<string>> {
 
 export async function getPendingStandIds(standIds: string[]): Promise<Set<string>> {
   if (!standIds.length) return new Set()
-  const rows = await db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray()
-  return new Set(rows.map(p => p.stand_id))
+  const [prestRows, standRows] = await Promise.all([
+    db.prestations.where('stand_id').anyOf(standIds).filter(p => p.pending_sync === 1).toArray(),
+    db.stands.where('id').anyOf(standIds).filter(s => s.pending_sync === 1).toArray(),
+  ])
+  return new Set([...prestRows.map(p => p.stand_id), ...standRows.map(s => s.id)])
 }

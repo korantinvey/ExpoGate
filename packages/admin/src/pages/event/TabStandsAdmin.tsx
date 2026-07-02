@@ -36,7 +36,9 @@ export function TabStands({ ev }: { ev: Evenement }) {
         if (!localPrestsByStand[p.stand_id]) localPrestsByStand[p.stand_id] = []
         localPrestsByStand[p.stand_id].push(p)
       }
-      setPendingStandIds(new Set(localPrests.filter(p => p.pending_sync === 1).map(p => p.stand_id)))
+      const pendingFromPrests = localPrests.filter(p => p.pending_sync === 1).map(p => p.stand_id)
+      const pendingFromStands = localStands.filter(s => s.pending_sync === 1).map(s => s.id)
+      setPendingStandIds(new Set([...pendingFromPrests, ...pendingFromStands]))
       setStands(localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map(s => categoriserStand(s as unknown as Stand, localPrestsByStand)))
     }
     try {
