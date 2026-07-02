@@ -15,12 +15,24 @@ import { FicheEvenementOrganisateurPage } from './pages/FicheEvenementOrganisate
 import { ControleurEventPage } from './pages/ControleurEventPage'
 import { ControleurStandPage } from './pages/ControleurStandPage'
 import { sb } from './lib/supabase'
+import { syncPending, getPendingCount } from './lib/sync'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import { useInstallPrompt } from './hooks/useInstallPrompt'
 import { ThemeContext, useThemeProvider } from './hooks/useTheme'
 
+function useSyncOnReconnect(userId: string | null) {
+  useEffect(() => {
+    if (!userId) return
+    const handleOnline = () => { syncPending().catch(() => {}) }
+    window.addEventListener('online', handleOnline)
+    if (navigator.onLine) getPendingCount().then(n => { if (n > 0) syncPending().catch(() => {}) })
+    return () => window.removeEventListener('online', handleOnline)
+  }, [userId])
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth()
+  useSyncOnReconnect(user?.id ?? null)
   const { permission, requestPermission, supported, subscribed, checking: pushChecking } = usePushNotifications(user?.id ?? null)
   const { standalone, canPrompt, isIos, isAndroid, hasNativePrompt, triggerInstall, inBrowserAfterInstall } = useInstallPrompt()
 
