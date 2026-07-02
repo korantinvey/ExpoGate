@@ -4,6 +4,7 @@ import { sb } from '../lib/supabase'
 import { db, getPendingPrestaIds } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
+import { downloadEvent } from '../lib/sync'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -293,6 +294,8 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
   )
 }
 
+const REFRESH_THRESHOLD_MS = 30 * 60 * 1000
+
 export function FicheEvenementOrganisateurPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -309,7 +312,12 @@ export function FicheEvenementOrganisateurPage() {
       ])
       if (evErr) throw evErr
       setEv(evData ?? null)
-      setRole((accesData?.role_local as RoleLocal) ?? null)
+      const resolvedRole = (accesData?.role_local as RoleLocal) ?? null
+      setRole(resolvedRole)
+      // Téléchargement silencieux pour le mode hors ligne
+      const local = await db.evenements.get(id)
+      const stale = !local?.downloaded_at || Date.now() - new Date(local.downloaded_at).getTime() > REFRESH_THRESHOLD_MS
+      if (stale) downloadEvent(id, resolvedRole ?? undefined).catch(() => {})
     } catch {
       const local = await db.evenements.get(id)
       if (local) {
