@@ -17,6 +17,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
 }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
+  const [standsLoading, setStandsLoading] = useState(true)
   const [standId, setStandId] = useState(prest?.stand_id ?? '')
   const [libelle, setLibelle] = useState(prest?.libelle ?? '')
   const [categorie, setCategorie] = useState(prest?.categorie ?? '')
@@ -51,6 +52,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
           if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
         }
       }
+      setStandsLoading(false)
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
       try {
         const [{ data: s }, { data: p }] = await Promise.all([
@@ -84,7 +86,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
     return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
   }, [newPhotos])
 
-  if (stands.length === 0) {
+  if (!standsLoading && stands.length === 0) {
     return (
       <Modal title="Aucun stand disponible" confirmLabel="Aller aux stands" onClose={onSaved} onConfirm={async () => { onGoToStands(); return true }}>
         <p>Vous devez d'abord ajouter des stands à cet événement.</p>
