@@ -54,6 +54,10 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
       if (!error && data) {
         setPrestations(data)
         setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
+        // Mise à jour du cache local pour l'accès hors ligne
+        const pending = new Set((await db.prestations.where('pending_sync').equals(1).primaryKeys()) as string[])
+        const toWrite = data.filter(p => !pending.has(p.id)).map(p => ({ id: p.id, stand_id: p.stand_id, prestataire_id: p.prestataire_id ?? null, libelle: p.libelle, categorie: p.categorie ?? null, quantite_attendue: p.quantite_attendue, emplacement_prevu: p.emplacement_prevu ?? null, ajout_sur_site: p.ajout_sur_site, commentaire_prestataire: p.commentaire_prestataire ?? null, statut_conformite: p.statut_conformite ?? null, quantite_constatee: p.quantite_constatee ?? null, commentaire: p.commentaire ?? null, controleur_id: p.controleur_id ?? null, date_controle: p.date_controle ?? null, pending_sync: 0 as const }))
+        if (toWrite.length) await db.prestations.bulkPut(toWrite)
       }
     } catch { /* données locales déjà affichées */ }
   }
