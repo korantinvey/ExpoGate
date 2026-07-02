@@ -28,6 +28,7 @@ interface Props<T> {
   selectable?: boolean
   selectedIds?: Set<string>
   onSelectionChange?: (ids: Set<string>) => void
+  onFilteredRowsChange?: (rows: T[]) => void
 }
 
 type SortDir = 'asc' | 'desc' | null
@@ -88,7 +89,7 @@ const popoverStyle: React.CSSProperties = {
   borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '8px', marginTop: 4,
 }
 
-export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady, selectable, selectedIds, onSelectionChange }: Props<T>) {
+export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady, selectable, selectedIds, onSelectionChange, onFilteredRowsChange }: Props<T>) {
   const mobile = isMobile()
   const visibleColumns = useMemo(() => mobile ? columns.filter(c => !c.hideOnMobile) : columns, [columns, mobile])
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -143,6 +144,10 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processed, exportFilename])
+
+  const onFilteredRowsChangeRef = useRef(onFilteredRowsChange)
+  onFilteredRowsChangeRef.current = onFilteredRowsChange
+  useEffect(() => { onFilteredRowsChangeRef.current?.(processed) }, [processed])
 
   const effectiveSelected = selectedIds ?? new Set<string>()
   const filteredIds = useMemo(() => processed.map(r => (r as Record<string, unknown>).id as string).filter(Boolean), [processed])

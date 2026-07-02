@@ -262,6 +262,7 @@ function TabStands({ ev }: { ev: Evenement }) {
   const [sousOnglet, setSousOnglet] = useState<'a_valider' | 'valide' | 'tous'>('a_valider')
   const [pendingStandIds, setPendingStandIds] = useState<Set<string>>(new Set())
   const [selectedStandIds, setSelectedStandIds] = useState<Set<string>>(new Set())
+  const [filteredStands, setFilteredStands] = useState<StandAvecStatut[]>([])
   const [bulkField, setBulkField] = useState<BulkStandField>('hall')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
@@ -306,17 +307,17 @@ function TabStands({ ev }: { ev: Evenement }) {
   useEffect(() => { load() }, [])
 
   async function applyBulkStands() {
-    if (!selectedStandIds.size) return
-    setBulkApplying(true)
+    const bulkIds = selectedStandIds.size > 0 ? selectedStandIds : new Set(filteredStands.map(s => s.id))
+    if (!bulkIds.size) { setBulkApplying(false); return }
     const patch: Record<string, unknown> = {}
     if (bulkField === 'hall') patch.hall = bulkValue || null
     else if (bulkField === 'nom_exposant') patch.nom_exposant = bulkValue || null
     else if (bulkField === 'surface') patch.surface = bulkValue !== '' ? parseFloat(bulkValue) : null
     else if (bulkField === 'angles') patch.angles = bulkValue !== '' ? parseInt(bulkValue) : null
-    const { error } = await sb.from('stands').update(patch).in('id', [...selectedStandIds])
+    const { error } = await sb.from('stands').update(patch).in('id', [...bulkIds])
     setBulkApplying(false)
     if (error) { bulkNotify(error.message, 'error'); return }
-    bulkNotify(`${selectedStandIds.size} stand${selectedStandIds.size > 1 ? 's' : ''} mis à jour`, 'success')
+    bulkNotify(`${bulkIds.size} stand${bulkIds.size > 1 ? 's' : ''} mis à jour`, 'success')
     setSelectedStandIds(new Set())
     load()
   }
@@ -327,6 +328,7 @@ function TabStands({ ev }: { ev: Evenement }) {
 
   const nbAValider = stands.filter(s => s._statut !== 'valide').length
   const nbValides = stands.filter(s => s._statut === 'valide').length
+  const showBulkStands = selectedStandIds.size > 0 || filteredStands.length < standsFiltrés.length
 
   return (
     <>
@@ -351,10 +353,12 @@ function TabStands({ ev }: { ev: Evenement }) {
           ))}
         </div>
         <div className="card-body">
-          {selectedStandIds.size > 0 && (
+          {showBulkStands && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(29,158,117,0.08)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)', whiteSpace: 'nowrap' }}>
-                {selectedStandIds.size} stand{selectedStandIds.size > 1 ? 's' : ''} sélectionné{selectedStandIds.size > 1 ? 's' : ''}
+                {selectedStandIds.size > 0
+                  ? `${selectedStandIds.size} stand${selectedStandIds.size > 1 ? 's' : ''} sélectionné${selectedStandIds.size > 1 ? 's' : ''}`
+                  : `${filteredStands.length} stand${filteredStands.length > 1 ? 's' : ''} filtré${filteredStands.length > 1 ? 's' : ''}`}
               </span>
               <span style={{ color: 'var(--border)' }}>|</span>
               <select value={bulkField} onChange={e => { setBulkField(e.target.value as BulkStandField); setBulkValue('') }}
@@ -374,7 +378,9 @@ function TabStands({ ev }: { ev: Evenement }) {
               <button className="btn btn-primary btn-sm" onClick={applyBulkStands} disabled={bulkApplying}>
                 {bulkApplying ? '…' : 'Appliquer'}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedStandIds(new Set())}>Désélectionner</button>
+              {selectedStandIds.size > 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedStandIds(new Set())}>Désélectionner</button>
+              )}
             </div>
           )}
           <DataTable
@@ -385,6 +391,7 @@ function TabStands({ ev }: { ev: Evenement }) {
             selectable
             selectedIds={selectedStandIds}
             onSelectionChange={setSelectedStandIds}
+            onFilteredRowsChange={rows => setFilteredStands(rows as StandAvecStatut[])}
             emptyState={<div className="empty-state">{sousOnglet === 'a_valider' ? 'Tous les stands sont validés ✓' : sousOnglet === 'valide' ? 'Aucun stand validé pour l\'instant' : 'Aucun stand pour cet événement'}</div>}
             columns={[
               { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true, render: (s: StandAvecStatut) => (
@@ -911,6 +918,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   const [bulkPrestaField, setBulkPrestaField] = useState<BulkPrestaField>('prestataire_id')
   const [bulkPrestaValue, setBulkPrestaValue] = useState('')
   const [bulkPrestaApplying, setBulkPrestaApplying] = useState(false)
+  const [filteredPrestations, setFilteredPrestations] = useState<Prestation[]>([])
   const [bulkPrestataires, setBulkPrestataires] = useState<Prestataire[]>([])
   const { notify: bulkNotify } = useToast()
 
@@ -955,20 +963,23 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
   }, [])
 
   async function applyBulkPrestations() {
-    if (!selectedPrestaIds.size) return
     setBulkPrestaApplying(true)
+    const bulkIds = selectedPrestaIds.size > 0 ? selectedPrestaIds : new Set(filteredPrestations.map(p => p.id))
+    if (!bulkIds.size) { setBulkPrestaApplying(false); return }
     const patch: Record<string, unknown> = {}
     if (bulkPrestaField === 'prestataire_id') patch.prestataire_id = bulkPrestaValue || null
     else if (bulkPrestaField === 'categorie') patch.categorie = bulkPrestaValue || null
     else if (bulkPrestaField === 'emplacement_prevu') patch.emplacement_prevu = bulkPrestaValue || null
     else if (bulkPrestaField === 'ajout_sur_site') patch.ajout_sur_site = bulkPrestaValue === 'true'
-    const { error } = await sb.from('prestations').update(patch).in('id', [...selectedPrestaIds])
+    const { error } = await sb.from('prestations').update(patch).in('id', [...bulkIds])
     setBulkPrestaApplying(false)
     if (error) { bulkNotify(error.message, 'error'); return }
-    bulkNotify(`${selectedPrestaIds.size} prestation${selectedPrestaIds.size > 1 ? 's' : ''} mise${selectedPrestaIds.size > 1 ? 's' : ''} à jour`, 'success')
+    bulkNotify(`${bulkIds.size} prestation${bulkIds.size > 1 ? 's' : ''} mise${bulkIds.size > 1 ? 's' : ''} à jour`, 'success')
     setSelectedPrestaIds(new Set())
     load()
   }
+
+  const showBulkPrestas = selectedPrestaIds.size > 0 || filteredPrestations.length < prestations.length
 
   return (
     <>
@@ -982,10 +993,12 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
           </div>
         </div>
         <div className="card-body">
-          {selectedPrestaIds.size > 0 && (
+          {showBulkPrestas && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(29,158,117,0.08)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)', whiteSpace: 'nowrap' }}>
-                {selectedPrestaIds.size} prestation{selectedPrestaIds.size > 1 ? 's' : ''} sélectionné{selectedPrestaIds.size > 1 ? 'es' : 'e'}
+                {selectedPrestaIds.size > 0
+                  ? `${selectedPrestaIds.size} prestation${selectedPrestaIds.size > 1 ? 's' : ''} sélectionné${selectedPrestaIds.size > 1 ? 'es' : 'e'}`
+                  : `${filteredPrestations.length} prestation${filteredPrestations.length > 1 ? 's' : ''} filtré${filteredPrestations.length > 1 ? 'es' : 'e'}`}
               </span>
               <span style={{ color: 'var(--border)' }}>|</span>
               <select value={bulkPrestaField} onChange={e => { setBulkPrestaField(e.target.value as BulkPrestaField); setBulkPrestaValue('') }}
@@ -1016,7 +1029,9 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
               <button className="btn btn-primary btn-sm" onClick={applyBulkPrestations} disabled={bulkPrestaApplying}>
                 {bulkPrestaApplying ? '…' : 'Appliquer'}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedPrestaIds(new Set())}>Désélectionner</button>
+              {selectedPrestaIds.size > 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedPrestaIds(new Set())}>Désélectionner</button>
+              )}
             </div>
           )}
           <DataTable
@@ -1028,6 +1043,7 @@ function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () 
             selectable
             selectedIds={selectedPrestaIds}
             onSelectionChange={setSelectedPrestaIds}
+            onFilteredRowsChange={rows => setFilteredPrestations(rows as Prestation[])}
             emptyState={<div className="empty-state">Aucune prestation pour cet événement</div>}
             columns={[
               { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => p.stands?.numero ?? '', render: p => <><strong>{p.stands?.numero}</strong>{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</> },
