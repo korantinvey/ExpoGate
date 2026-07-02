@@ -151,22 +151,45 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
       if (!libelle || !standId) { setError('Le stand et le libellé sont obligatoires.'); return false }
 
       if (isOffline) {
-        if (!prest?.id) { setError('Création de prestation non disponible hors ligne.'); return false }
         const now = new Date().toISOString()
-        await db.prestations.update(prest.id, {
-          stand_id: standId,
-          libelle,
-          categorie: categorie || null,
-          quantite_attendue: qte,
-          emplacement_prevu: emplacement || null,
-          prestataire_id: prestaId || null,
-          ajout_sur_site: ajoutSurSite,
-          commentaire_prestataire: commentairePrestataire || null,
-          ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
-          pending_sync: 1,
-        })
-        for (const file of newPhotos) {
-          await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
+        if (prest?.id) {
+          await db.prestations.update(prest.id, {
+            stand_id: standId,
+            libelle,
+            categorie: categorie || null,
+            quantite_attendue: qte,
+            emplacement_prevu: emplacement || null,
+            prestataire_id: prestaId || null,
+            ajout_sur_site: ajoutSurSite,
+            commentaire_prestataire: commentairePrestataire || null,
+            ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
+            pending_sync: 1,
+          })
+          for (const file of newPhotos) {
+            await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
+          }
+        } else {
+          const newId = crypto.randomUUID()
+          await db.prestations.add({
+            id: newId,
+            stand_id: standId,
+            prestataire_id: prestaId || null,
+            libelle,
+            categorie: categorie || null,
+            quantite_attendue: qte,
+            emplacement_prevu: emplacement || null,
+            ajout_sur_site: ajoutSurSite,
+            commentaire_prestataire: commentairePrestataire || null,
+            statut_conformite: cStatut ? cStatut as ControleStatut : null,
+            quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
+            commentaire: cComment || null,
+            controleur_id: null,
+            date_controle: cStatut ? now : null,
+            pending_sync: 1,
+          })
+          for (const file of newPhotos) {
+            await db.photos.add({ prestation_id: newId, blob: file, created_at: now, synced: 0, remote_url: null })
+          }
         }
         onSaved(); return true
       }

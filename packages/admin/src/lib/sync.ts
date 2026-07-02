@@ -39,10 +39,11 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
 export async function syncPending(): Promise<number> {
   let count = 0
 
-  // Sync des prestations modifiées hors ligne
+  // Sync des prestations créées ou modifiées hors ligne
   const pending = await db.prestations.where('pending_sync').equals(1).toArray()
   await Promise.allSettled(pending.map(async p => {
-    const { error } = await sb.from('prestations').update({
+    const { error } = await sb.from('prestations').upsert({
+      id: p.id,
       stand_id: p.stand_id,
       prestataire_id: p.prestataire_id,
       libelle: p.libelle,
@@ -56,7 +57,7 @@ export async function syncPending(): Promise<number> {
       commentaire: p.commentaire,
       controleur_id: p.controleur_id,
       date_controle: p.date_controle,
-    }).eq('id', p.id)
+    }, { onConflict: 'id' })
     if (!error) {
       await db.prestations.update(p.id, { pending_sync: 0 })
       count++
