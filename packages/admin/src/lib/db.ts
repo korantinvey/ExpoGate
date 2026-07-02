@@ -71,6 +71,13 @@ export interface LocalMcPhoto {
   remote_url: string | null
 }
 
+export interface LocalPrestataire {
+  id: string
+  raison_sociale: string
+  email_contact: string | null
+  telephone: string | null
+}
+
 class ExpoGateDB extends Dexie {
   evenements!: Table<LocalEvenement, string>
   stands!: Table<LocalStand, string>
@@ -78,6 +85,7 @@ class ExpoGateDB extends Dexie {
   photos!: Table<LocalPhoto, number>
   main_courante!: Table<LocalMainCourante, string>
   mc_photos!: Table<LocalMcPhoto, number>
+  prestataires!: Table<LocalPrestataire, string>
 
   constructor() {
     super('expogate')
@@ -93,6 +101,9 @@ class ExpoGateDB extends Dexie {
     })
     this.version(3).stores({
       stands: 'id, evenement_id, pending_sync',
+    })
+    this.version(4).stores({
+      prestataires: 'id',
     })
   }
 }

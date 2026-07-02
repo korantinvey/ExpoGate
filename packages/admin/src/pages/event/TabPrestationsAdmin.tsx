@@ -57,7 +57,12 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
 
   useEffect(() => { load() }, [])
   useEffect(() => {
-    sb.from('prestataires').select('*').order('raison_sociale').then(({ data }) => setBulkPrestataires(data ?? []))
+    db.prestataires.orderBy('raison_sociale').toArray().then(local => { if (local.length) setBulkPrestataires(local as unknown as Prestataire[]) })
+    sb.from('prestataires').select('*').order('raison_sociale').then(({ data }) => {
+      if (!data) return
+      setBulkPrestataires(data)
+      db.prestataires.bulkPut(data.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+    })
   }, [])
 
   async function applyBulkPrestations() {

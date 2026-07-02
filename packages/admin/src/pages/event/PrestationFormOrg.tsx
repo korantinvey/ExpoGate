@@ -38,7 +38,10 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
 
   useEffect(() => {
     async function loadForm() {
-      const localStands = await db.stands.where('evenement_id').equals(evenementId).toArray()
+      const [localStands, localPrestataires] = await Promise.all([
+        db.stands.where('evenement_id').equals(evenementId).toArray(),
+        db.prestataires.orderBy('raison_sociale').toArray(),
+      ])
       if (localStands.length) {
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
@@ -48,6 +51,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
           if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
         }
       }
+      if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
       try {
         const [{ data: s }, { data: p }] = await Promise.all([
           sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
@@ -61,7 +65,10 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
             if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
           }
         }
-        if (p) setPrestataires(p)
+        if (p) {
+          setPrestataires(p)
+          db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+        }
       } catch { /* données locales déjà affichées */ }
     }
     loadForm()
