@@ -5,7 +5,7 @@ import { compressImage } from './compressImage'
 export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
   const [{ data: ev, error: evErr }, { data: stands, error: standsErr }] = await Promise.all([
     sb.from('evenements').select('id, nom, lieu, date_debut, date_fin, statut').eq('id', eventId).single(),
-    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero').eq('evenement_id', eventId).eq('deleted', false).order('numero'),
+    sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero, surface, angles').eq('evenement_id', eventId).eq('deleted', false).order('numero'),
   ])
   if (evErr || !ev) throw new Error(evErr?.message ?? 'Événement introuvable')
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
@@ -22,7 +22,17 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
 
   await db.transaction('rw', [db.evenements, db.stands, db.prestations], async () => {
     await db.evenements.put({ ...ev, downloaded_at: new Date().toISOString(), role_local: role_local ?? null })
-    await db.stands.bulkPut(stands)
+    const pendingStandIds = new Set(
+      await db.stands.where('pending_sync').equals(1).primaryKeys()
+    )
+    const standsToWrite = stands
+      .filter(s => !pendingStandIds.has(s.id))
+      .map(s => ({ ...s, pending_sync: 0 as const }))
+    if (standsToWrite.length) await db.stands.bulkPut(standsToWrite)
+    const serverStandIds = new Set(stands.map(s => s.id))
+    const localStandIds = await db.stands.where('evenement_id').equals(eventId).primaryKeys() as string[]
+    const standsToDelete = localStandIds.filter(id => !serverStandIds.has(id) && !pendingStandIds.has(id))
+    if (standsToDelete.length) await db.stands.bulkDelete(standsToDelete)
     const pendingIds = new Set(
       await db.prestations.where('pending_sync').equals(1).primaryKeys()
     )
@@ -39,6 +49,24 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
 
 export async function syncPending(): Promise<number> {
   let count = 0
+
+  // Sync des stands créés ou modifiés hors ligne
+  const pendingStands = await db.stands.where('pending_sync').equals(1).toArray()
+  await Promise.allSettled(pendingStands.map(async s => {
+    const { error } = await sb.from('stands').upsert({
+      id: s.id,
+      evenement_id: s.evenement_id,
+      nom_exposant: s.nom_exposant,
+      hall: s.hall,
+      numero: s.numero,
+      surface: s.surface,
+      angles: s.angles,
+    }, { onConflict: 'id' })
+    if (!error) {
+      await db.stands.update(s.id, { pending_sync: 0 })
+      count++
+    }
+  }))
 
   // Sync des prestations créées ou modifiées hors ligne
   const pending = await db.prestations.where('pending_sync').equals(1).toArray()
@@ -145,11 +173,12 @@ export async function syncPending(): Promise<number> {
 }
 
 export async function getPendingCount(): Promise<number> {
-  const [prests, photos, mcs, mcPhotos] = await Promise.all([
+  const [stands, prests, photos, mcs, mcPhotos] = await Promise.all([
+    db.stands.where('pending_sync').equals(1).count(),
     db.prestations.where('pending_sync').equals(1).count(),
     db.photos.where('synced').equals(0).count(),
     db.main_courante.where('pending_sync').equals(1).count(),
     db.mc_photos.where('synced').equals(0).count(),
   ])
-  return prests + photos + mcs + mcPhotos
+  return stands + prests + photos + mcs + mcPhotos
 }

@@ -18,6 +18,9 @@ export interface LocalStand {
   nom_exposant: string | null
   hall: string | null
   numero: string
+  surface: number | null
+  angles: number | null
+  pending_sync: 0 | 1
 }
 
 export interface LocalPrestation {
@@ -87,6 +90,9 @@ class ExpoGateDB extends Dexie {
     this.version(2).stores({
       main_courante: 'id, evenement_id, pending_sync',
       mc_photos: '++id, main_courante_id, synced',
+    })
+    this.version(3).stores({
+      stands: 'id, evenement_id, pending_sync',
     })
   }
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { sb } from '../../lib/supabase'
+import { db } from '../../lib/db'
 import { Modal } from '../../components/ui/Modal'
 import { Alert } from '../../components/ui/Alert'
 import type { Stand } from '../../types'
@@ -14,13 +15,41 @@ export function StandForm({ stand, evenementId, onSaved, canDelete = true }: { s
 
   async function save(): Promise<boolean> {
     if (!numero) { setError('Le numéro de stand est obligatoire.'); return false }
+    const surfaceVal = surface !== '' ? parseFloat(surface) : null
+    const anglesVal = angles !== '' ? parseInt(angles) : null
+
+    if (!navigator.onLine) {
+      if (stand?.id) {
+        await db.stands.update(stand.id, {
+          nom_exposant: exposant || null,
+          hall: hall || null,
+          numero,
+          surface: surfaceVal,
+          angles: anglesVal,
+          pending_sync: 1,
+        })
+      } else {
+        await db.stands.add({
+          id: crypto.randomUUID(),
+          evenement_id: evenementId,
+          nom_exposant: exposant || null,
+          hall: hall || null,
+          numero,
+          surface: surfaceVal,
+          angles: anglesVal,
+          pending_sync: 1,
+        })
+      }
+      onSaved(); return true
+    }
+
     const payload = {
       evenement_id: evenementId,
       nom_exposant: exposant || null,
       hall: hall || null,
       numero,
-      surface: surface !== '' ? parseFloat(surface) : null,
-      angles: angles !== '' ? parseInt(angles) : null,
+      surface: surfaceVal,
+      angles: anglesVal,
     }
     const { error } = stand
       ? await sb.from('stands').update(payload).eq('id', stand.id)
