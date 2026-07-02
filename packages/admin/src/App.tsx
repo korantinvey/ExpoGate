@@ -21,7 +21,7 @@ import { ThemeContext, useThemeProvider } from './hooks/useTheme'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
-  const { permission, requestPermission, supported, subscribed } = usePushNotifications(user?.id ?? null)
+  const { permission, requestPermission, supported, subscribed, checking: pushChecking } = usePushNotifications(user?.id ?? null)
   const { standalone, canPrompt, isIos, isAndroid, hasNativePrompt, triggerInstall, inBrowserAfterInstall } = useInstallPrompt()
 
   const [installDismissed, setInstallDismissed] = useState(false)
@@ -31,7 +31,7 @@ function AppRoutes() {
   // Ordre de priorité : install → "utiliser l'app" → push
   const showInstallBanner = canPrompt && !installDismissed
   const showUseAppBanner = inBrowserAfterInstall && !useAppDismissed && !showInstallBanner
-  const showPushBanner = supported && !subscribed && permission !== 'denied' && !pushDismissed && !showInstallBanner && !showUseAppBanner
+  const showPushBanner = !pushChecking && supported && !subscribed && permission !== 'denied' && !pushDismissed && !showInstallBanner && !showUseAppBanner
 
   function dismissInstall() { setInstallDismissed(true) }
   function dismissUseApp() { localStorage.setItem('use_app_dismissed', '1'); setUseAppDismissed(true) }
