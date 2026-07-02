@@ -423,7 +423,6 @@ function PrestationForm({ prest, evenementId, onSaved, onGoToStands }: { prest: 
       setStands(s ?? [])
       setPrestataires(p ?? [])
       if (!prest?.stand_id && s?.length) setStandId(s[0].id)
-      if (!prest?.prestataire_id && p?.length) setPrestaId(p[0].id)
       if (prest?.stand_id) {
         const found = (s ?? []).find(st => st.id === prest.stand_id)
         if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
