@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sb } from '../../lib/supabase'
-import { getPendingStandIds } from '../../lib/db'
+import { db, getPendingStandIds } from '../../lib/db'
 import { SyncDot } from '../../components/ui/SyncDot'
 import { ImportButton } from '../../components/ui/ImportButton'
 import { DataTable } from '../../components/ui/DataTable'
@@ -28,22 +28,35 @@ export function TabStands({ ev }: { ev: Evenement }) {
   const { notify: bulkNotify } = useToast()
 
   async function load() {
-    const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
-    const rawStands = standsData ?? []
-    const standIds = rawStands.map(s => s.id)
-    const prestationsParStand: Record<string, { statut_conformite: string | null }[]> = {}
-    if (standIds.length > 0) {
-      const [{ data: p }, pendingIds] = await Promise.all([
-        sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false),
-        getPendingStandIds(standIds),
-      ])
-      for (const row of p ?? []) {
-        if (!prestationsParStand[row.stand_id]) prestationsParStand[row.stand_id] = []
-        prestationsParStand[row.stand_id].push(row)
+    const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    if (localStands.length) {
+      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      const localPrestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
+      for (const p of localPrests) {
+        if (!localPrestsByStand[p.stand_id]) localPrestsByStand[p.stand_id] = []
+        localPrestsByStand[p.stand_id].push(p)
       }
-      setPendingStandIds(pendingIds)
+      setPendingStandIds(new Set(localPrests.filter(p => p.pending_sync === 1).map(p => p.stand_id)))
+      setStands(localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map(s => categoriserStand(s as unknown as Stand, localPrestsByStand)))
     }
-    setStands(rawStands.map(s => categoriserStand(s, prestationsParStand)))
+    try {
+      const { data: standsData, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
+      if (error || !standsData) return
+      const standIds = standsData.map(s => s.id)
+      const prestationsParStand: Record<string, { statut_conformite: string | null }[]> = {}
+      if (standIds.length > 0) {
+        const [{ data: p }, pendingIds] = await Promise.all([
+          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false),
+          getPendingStandIds(standIds),
+        ])
+        for (const row of p ?? []) {
+          if (!prestationsParStand[row.stand_id]) prestationsParStand[row.stand_id] = []
+          prestationsParStand[row.stand_id].push(row)
+        }
+        setPendingStandIds(pendingIds)
+      }
+      setStands(standsData.map(s => categoriserStand(s, prestationsParStand)))
+    } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [])

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sb, sbAdmin } from '../../lib/supabase'
+import { db } from '../../lib/db'
 import { Modal } from '../../components/ui/Modal'
 import { Alert } from '../../components/ui/Alert'
 import { compressImage } from '../../lib/compressImage'
@@ -29,18 +30,34 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
   const [lightbox, setLightbox] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
-      sb.from('prestataires').select('*').order('raison_sociale'),
-    ]).then(([{ data: s }, { data: p }]) => {
-      setStands(s ?? [])
-      setPrestataires(p ?? [])
-      if (!prest?.stand_id && s?.length) setStandId(s[0].id)
-      if (prest?.stand_id) {
-        const found = (s ?? []).find(st => st.id === prest.stand_id)
-        if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+    async function loadForm() {
+      const localStands = await db.stands.where('evenement_id').equals(evenementId).toArray()
+      if (localStands.length) {
+        const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
+        setStands(s)
+        if (!prest?.stand_id) setStandId(s[0].id)
+        if (prest?.stand_id) {
+          const found = s.find(st => st.id === prest.stand_id)
+          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+        }
       }
-    })
+      try {
+        const [{ data: s }, { data: p }] = await Promise.all([
+          sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
+          sb.from('prestataires').select('*').order('raison_sociale'),
+        ])
+        if (s) {
+          setStands(s)
+          if (!prest?.stand_id && s.length) setStandId(s[0].id)
+          if (prest?.stand_id) {
+            const found = s.find(st => st.id === prest.stand_id)
+            if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+          }
+        }
+        if (p) setPrestataires(p)
+      } catch { /* données locales déjà affichées */ }
+    }
+    loadForm()
     if (prest?.id) {
       sbAdmin.from('photos').select('url').eq('prestation_id', prest.id).not('url', 'is', null)
         .then(({ data }) => setPhotos((data ?? []).map(p => p.url!)))
@@ -65,6 +82,38 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
     if (!libelle || !standId) { setError('Le stand et le libellé sont obligatoires.'); return false }
     setUploading(true)
     try {
+      if (!navigator.onLine) {
+        const now = new Date().toISOString()
+        if (prest?.id) {
+          await db.prestations.update(prest.id, {
+            stand_id: standId, libelle, categorie: categorie || null,
+            quantite_attendue: qte, emplacement_prevu: emplacement || null,
+            prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
+            ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
+            pending_sync: 1,
+          })
+          for (const file of newPhotos) {
+            await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
+          }
+        } else {
+          const newId = crypto.randomUUID()
+          await db.prestations.add({
+            id: newId, stand_id: standId, prestataire_id: prestaId || null,
+            libelle, categorie: categorie || null, quantite_attendue: qte,
+            emplacement_prevu: emplacement || null, ajout_sur_site: ajoutSurSite,
+            commentaire_prestataire: null,
+            statut_conformite: cStatut ? cStatut as ControleStatut : null,
+            quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
+            commentaire: cComment || null, controleur_id: null,
+            date_controle: cStatut ? now : null, pending_sync: 1,
+          })
+          for (const file of newPhotos) {
+            await db.photos.add({ prestation_id: newId, blob: file, created_at: now, synced: 0, remote_url: null })
+          }
+        }
+        onSaved(); return true
+      }
+
       const { data: { user } } = await sb.auth.getUser()
       const conformitePayload = cStatut ? {
         statut_conformite: cStatut,

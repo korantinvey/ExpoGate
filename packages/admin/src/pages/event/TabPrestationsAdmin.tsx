@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sb } from '../../lib/supabase'
-import { getPendingPrestaIds } from '../../lib/db'
+import { db, getPendingPrestaIds } from '../../lib/db'
 import { SyncDot } from '../../components/ui/SyncDot'
 import { ImportButton } from '../../components/ui/ImportButton'
 import { DataTable } from '../../components/ui/DataTable'
@@ -26,21 +26,33 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
   const { notify: bulkNotify } = useToast()
 
   async function load() {
-    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
-    const standIds = (stands ?? []).map(s => s.id)
-    if (!standIds.length) { setPrestations([]); return }
-    const { data } = await sb.from('prestations')
-      .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
-      .in('stand_id', standIds)
-      .eq('deleted', false)
-      .order('libelle')
-    if (data) {
-      setPrestations(data)
-      setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
-    } else {
-      setPrestations([])
-      setPendingSyncIds(new Set())
+    const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    if (localStands.length) {
+      const standMap = Object.fromEntries(localStands.map(s => [s.id, s]))
+      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      setPendingSyncIds(await getPendingPrestaIds(localPrests.map(p => p.id)))
+      setPrestations(localPrests.map(p => ({
+        ...p,
+        stands: standMap[p.stand_id] ?? null,
+        prestataires: null,
+        users: null,
+      })) as unknown as Prestation[])
     }
+    try {
+      const { data: stands, error: standsErr } = await sb.from('stands').select('id').eq('evenement_id', ev.id).eq('deleted', false)
+      if (standsErr) throw standsErr
+      const standIds = (stands ?? []).map(s => s.id)
+      if (!standIds.length) { setPrestations([]); return }
+      const { data, error } = await sb.from('prestations')
+        .select('*, stands(numero, nom_exposant), prestataires(raison_sociale), users(nom, prenom)')
+        .in('stand_id', standIds)
+        .eq('deleted', false)
+        .order('libelle')
+      if (!error && data) {
+        setPrestations(data)
+        setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
+      }
+    } catch { /* données locales déjà affichées */ }
   }
 
   useEffect(() => { load() }, [])

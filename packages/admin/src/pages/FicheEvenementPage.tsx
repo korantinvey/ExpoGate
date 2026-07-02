@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
+import { db } from '../lib/db'
+import { downloadEvent } from '../lib/sync'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -77,8 +79,15 @@ export function FicheEvenementPage() {
 
   async function load() {
     if (!id) { navigate('/evenements'); return }
-    const { data } = await sb.from('evenements').select('*').eq('id', id).single()
-    setEv(data ?? null)
+    try {
+      const { data, error } = await sb.from('evenements').select('*').eq('id', id).single()
+      if (error) throw error
+      setEv(data ?? null)
+      downloadEvent(id, 'admin').catch(() => {})
+    } catch {
+      const local = await db.evenements.get(id)
+      if (local) setEv(local as unknown as Evenement)
+    }
   }
 
   useEffect(() => { load() }, [id])
