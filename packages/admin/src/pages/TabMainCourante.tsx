@@ -323,7 +323,7 @@ export function TabMainCourante({ ev, canDelete = false }: { ev: Evenement; canD
   const [entries, setEntries] = useState<MainCourante[]>([])
   const [modal, setModal] = useState<MainCourante | null | 'new'>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
-  const { notify, toastEl } = useToast()
+  const { notify } = useToast()
 
   const load = useCallback(async function load() {
     // Affichage immédiat depuis IndexedDB
@@ -490,7 +490,6 @@ export function TabMainCourante({ ev, canDelete = false }: { ev: Evenement; canD
       {modal !== null && (
         <McForm mc={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete={canDelete} />
       )}
-      {toastEl}
     </>
   )
 }

@@ -4,6 +4,7 @@ import { db } from '../../lib/db'
 import { Modal } from '../../components/ui/Modal'
 import { Alert } from '../../components/ui/Alert'
 import { compressImage } from '../../lib/compressImage'
+import { useToast } from '../../components/ui/Toast'
 import type { Prestation, Stand, Prestataire, ControleStatut } from '../../types'
 import { STATUT_LABELS } from './helpers'
 
@@ -47,6 +48,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
   const [newPhotoUrls, setNewPhotoUrls] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const { notify } = useToast()
 
   useEffect(() => {
     async function loadForm() {
@@ -189,7 +191,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         }
         // sbAdmin pour contourner le RLS qui bloque silencieusement l'update prestataire
         const { error } = await sbAdmin.from('prestations').update(payload).eq('id', prest.id)
-        if (error) { setError(error.message); return false }
+        if (error) { setError(error.message); notify(error.message); return false }
         const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
         if (shouldNotify) {
           const { data: { session } } = await sb.auth.getSession()
@@ -199,6 +201,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
             body: JSON.stringify({ prestation_id: prest.id }),
           }).catch(() => {})
         }
+        notify('Enregistré', 'success')
         onSaved(); return true
       }
 
@@ -273,10 +276,10 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       let savedId = prest?.id
       if (prest) {
         const { error } = await sb.from('prestations').update(payload).eq('id', prest.id)
-        if (error) { setError(error.message); return false }
+        if (error) { setError(error.message); notify(error.message); return false }
       } else {
         const { data, error } = await sb.from('prestations').insert(payload).select().single()
-        if (error) { setError(error.message); return false }
+        if (error) { setError(error.message); notify(error.message); return false }
         savedId = data.id
       }
       if (newPhotos.length && savedId) await uploadPendingPhotos(savedId)

@@ -41,7 +41,7 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
   const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [infoError, setInfoError] = useState('')
-  const { notify, toastEl } = useToast()
+  const { notify } = useToast()
 
   async function loadMembres() {
     const { data } = await sb.from('user_evenements')
@@ -208,7 +208,6 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
       {editingMembre && <EditMembreModal membre={editingMembre} onClose={() => { setEditingMembre(null); loadMembres() }} />}
       {editingPrestation && <PrestationForm readOnly canDelete prest={editingPrestation} evenementId={evenementId} onSaved={() => { setEditingPrestation(null); loadPrestations() }} onGoToStands={() => setEditingPrestation(null)} />}
       {inviting && <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />}
-      {toastEl}
     </>
   )
 }

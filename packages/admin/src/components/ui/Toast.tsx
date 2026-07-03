@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 interface ToastMsg { message: string; type: 'success' | 'error' }
+interface ToastContextValue { notify: (message: string, type?: 'success' | 'error') => void }
 
-export function Toast({ message, type = 'error', onDismiss }: ToastMsg & { onDismiss: () => void }) {
+const ToastContext = createContext<ToastContextValue>({ notify: () => {} })
+
+function ToastBanner({ message, type, onDismiss }: ToastMsg & { onDismiss: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onDismiss, 4000)
+    const t = setTimeout(onDismiss, 5000)
     return () => clearTimeout(t)
   }, [message])
 
@@ -23,11 +26,19 @@ export function Toast({ message, type = 'error', onDismiss }: ToastMsg & { onDis
   )
 }
 
-export function useToast() {
+export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastMsg | null>(null)
   function notify(message: string, type: 'success' | 'error' = 'error') {
     setToast({ message, type })
   }
-  const toastEl = toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null
-  return { notify, toastEl }
+  return (
+    <ToastContext.Provider value={{ notify }}>
+      {children}
+      {toast && <ToastBanner message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
+    </ToastContext.Provider>
+  )
+}
+
+export function useToast() {
+  return useContext(ToastContext)
 }

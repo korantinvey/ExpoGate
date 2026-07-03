@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { db, type LocalPrestation } from '../lib/db'
 import { syncPending, getPendingCount } from '../lib/sync'
+import { useToast } from '../components/ui/Toast'
 import type { ControleStatut } from '../types'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
   const [newPhotos, setNewPhotos] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const { notify } = useToast()
 
   // Génère les URLs de prévisualisation blob (state pour déclencher le re-render)
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
@@ -65,6 +67,7 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
     setSaving(true)
     try {
       const now = new Date().toISOString()
+
       const prevStatut = prest.statut_conformite
       const newStatut: ControleStatut | null = statut || null
       const isAnomalie = (s: ControleStatut | null) => s === 'non_conforme' || s === 'absent'
@@ -103,6 +106,8 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
         try { await syncPending() } catch { /* sera retenté plus tard */ }
       }
       onSaved()
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Erreur lors de l\'enregistrement')
     } finally {
       setSaving(false)
     }

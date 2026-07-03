@@ -31,7 +31,7 @@ export function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: R
   const [editing, setEditing] = useState<UserEvenement | null>(null)
   const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
-  const { notify, toastEl } = useToast()
+  const { notify } = useToast()
 
   async function load() {
     const { data } = await sb.from('user_evenements')
@@ -96,7 +96,6 @@ export function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: R
       {inviting && (
         <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />
       )}
-      {toastEl}
     </>
   )
 }

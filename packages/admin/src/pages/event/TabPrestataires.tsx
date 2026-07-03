@@ -23,7 +23,7 @@ export function TabPrestataires({ ev }: { ev: Evenement }) {
   const [newEmail, setNewEmail] = useState('')
   const [newTel, setNewTel] = useState('')
   const [newError, setNewError] = useState('')
-  const { notify, toastEl } = useToast()
+  const { notify } = useToast()
 
   async function load() {
     const { data: ep } = await sb.from('evenement_prestataires')
@@ -142,7 +142,6 @@ export function TabPrestataires({ ev }: { ev: Evenement }) {
           }
         </Modal>
       )}
-      {toastEl}
     </>
   )
 }

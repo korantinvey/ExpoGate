@@ -232,7 +232,7 @@ export function UtilisateursPage() {
   const [devicesModal, setDevicesModal] = useState<User | null>(null)
   const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [exportFn, setExportFn] = useState<(() => void) | null>(null)
-  const { notify, toastEl } = useToast()
+  const { notify } = useToast()
 
   async function load() {
     const [{ data: usersData }, { data: authData }] = await Promise.all([
@@ -290,7 +290,6 @@ export function UtilisateursPage() {
       {pushModal && <PushModal user={pushModal} onClose={() => setPushModal(null)} notify={notify} />}
       {devicesModal && <DevicesModal user={devicesModal} onClose={() => setDevicesModal(null)} notify={notify} />}
       {inviting && <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />}
-      {toastEl}
     </>
   )
 }

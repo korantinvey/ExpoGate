@@ -19,6 +19,7 @@ import { syncPending, getPendingCount } from './lib/sync'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import { useInstallPrompt } from './hooks/useInstallPrompt'
 import { ThemeContext, useThemeProvider } from './hooks/useTheme'
+import { ToastProvider } from './components/ui/Toast'
 
 function useSyncOnReconnect(userId: string | null) {
   useEffect(() => {
@@ -208,7 +209,9 @@ export default function App() {
     <ThemeContext.Provider value={themeCtx}>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeContext.Provider>
