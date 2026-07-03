@@ -3,12 +3,30 @@ import { sb } from '../../lib/supabase'
 import { db } from '../../lib/db'
 import type { Evenement } from '../../types'
 
+interface GlobalStats {
+  nbStands: number; total: number
+  conforme: number; non_conforme: number; absent: number; a_verifier: number; non_controlees: number
+  standsConforme: number; standsAControler: number; standsNonConforme: number
+}
+
+interface PrestataireStat {
+  id: string
+  nom: string
+  total: number
+  tauxAnomalie: number
+  delaiMoyenMs: number | null
+}
+
+function formatDuree(ms: number): string {
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  if (h >= 24) { const j = Math.floor(h / 24); const hr = h % 24; return hr > 0 ? `${j}j ${hr}h` : `${j}j` }
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`
+}
+
 export function TabDashboard({ ev }: { ev: Evenement }) {
-  const [stats, setStats] = useState<{
-    nbStands: number; total: number
-    conforme: number; non_conforme: number; absent: number; a_verifier: number; non_controlees: number
-    standsConforme: number; standsAControler: number; standsNonConforme: number
-  } | null>(null)
+  const [stats, setStats] = useState<GlobalStats | null>(null)
+  const [prestatairesStats, setPrestatairesStats] = useState<PrestataireStat[]>([])
 
   useEffect(() => {
     function classifyStands<S extends { id: string }, P extends { stand_id: string; statut_conformite: string | null }>(
@@ -24,9 +42,35 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
       return { standsConforme, standsAControler, standsNonConforme }
     }
 
+    function computePrestaStats(
+      prests: { prestataire_id?: string | null; anomalie?: boolean | null; date_anomalie?: string | null; date_retour_a_verifier?: string | null }[],
+      nomMap: Map<string, string>
+    ): PrestataireStat[] {
+      const byId = new Map<string, typeof prests[number][]>()
+      for (const p of prests) {
+        if (!p.prestataire_id) continue
+        if (!byId.has(p.prestataire_id)) byId.set(p.prestataire_id, [])
+        byId.get(p.prestataire_id)!.push(p)
+      }
+      const result: PrestataireStat[] = []
+      for (const [id, ps] of byId) {
+        const total = ps.length
+        const avecAnomalie = ps.filter(p => p.anomalie).length
+        const tauxAnomalie = Math.round(avecAnomalie / total * 100)
+        const delais = ps
+          .filter(p => p.date_anomalie && p.date_retour_a_verifier)
+          .map(p => new Date(p.date_retour_a_verifier!).getTime() - new Date(p.date_anomalie!).getTime())
+        const delaiMoyenMs = delais.length > 0 ? delais.reduce((a, b) => a + b, 0) / delais.length : null
+        result.push({ id, nom: nomMap.get(id) ?? id, total, tauxAnomalie, delaiMoyenMs })
+      }
+      return result.sort((a, b) => b.tauxAnomalie - a.tauxAnomalie || a.nom.localeCompare(b.nom, 'fr'))
+    }
+
     async function loadFromCache() {
       const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
       const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      const localPrestataires = await db.prestataires.toArray()
+      const nomMap = new Map(localPrestataires.map(p => [p.id, p.raison_sociale]))
       setStats({
         nbStands: localStands.length,
         total: localPrests.length,
@@ -37,7 +81,9 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
         non_controlees: localPrests.filter(p => !p.statut_conformite).length,
         ...classifyStands(localStands, localPrests),
       })
+      setPrestatairesStats(computePrestaStats(localPrests, nomMap))
     }
+
     async function load() {
       await loadFromCache()
       try {
@@ -46,9 +92,24 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
         const standIds = (standsRaw ?? []).map(s => s.id)
         if (!standIds.length) {
           setStats({ nbStands: 0, total: 0, conforme: 0, non_conforme: 0, absent: 0, a_verifier: 0, non_controlees: 0, standsConforme: 0, standsAControler: 0, standsNonConforme: 0 })
+          setPrestatairesStats([])
           return
         }
-        const prestsRaw = (await sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false)).data ?? []
+        const [prestsRes, epRes] = await Promise.all([
+          sb.from('prestations')
+            .select('stand_id, statut_conformite, prestataire_id, anomalie, date_anomalie, date_retour_a_verifier')
+            .in('stand_id', standIds)
+            .eq('deleted', false),
+          sb.from('evenement_prestataires')
+            .select('prestataire_id, prestataires(id, raison_sociale)')
+            .eq('evenement_id', ev.id),
+        ])
+        const prestsRaw = prestsRes.data ?? []
+        const nomMap = new Map<string, string>()
+        for (const ep of epRes.data ?? []) {
+          const p = ep.prestataires as unknown as { id: string; raison_sociale: string } | null
+          if (p) nomMap.set(p.id, p.raison_sociale)
+        }
         setStats({
           nbStands: standIds.length,
           total: prestsRaw.length,
@@ -59,6 +120,7 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
           non_controlees: prestsRaw.filter(p => !p.statut_conformite).length,
           ...classifyStands(standsRaw ?? [], prestsRaw),
         })
+        setPrestatairesStats(computePrestaStats(prestsRaw, nomMap))
       } catch { /* données locales déjà affichées */ }
     }
     load()
@@ -147,6 +209,41 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
           )}
         </div>
       </div>
+
+      {prestatairesStats.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Prestataires</div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', fontWeight: 500 }}>Prestataire</th>
+                  <th style={{ textAlign: 'right', padding: '10px 16px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', fontWeight: 500 }}>Prestations</th>
+                  <th style={{ textAlign: 'right', padding: '10px 16px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', fontWeight: 500 }}>Taux anomalie</th>
+                  <th style={{ textAlign: 'right', padding: '10px 16px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', fontWeight: 500 }}>Délai moy. résolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prestatairesStats.map((p, i) => {
+                  const anomalieColor = p.tauxAnomalie === 0 ? 'var(--success)' : p.tauxAnomalie > 50 ? 'var(--danger)' : '#f97316'
+                  return (
+                    <tr key={p.id} style={{ borderBottom: i < prestatairesStats.length - 1 ? '1px solid var(--border)' : undefined }}>
+                      <td style={{ padding: '10px 16px', fontWeight: 600 }}>{p.nom}</td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--text-muted)' }}>{p.total}</td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: anomalieColor }}>{p.tauxAnomalie}%</td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {p.delaiMoyenMs !== null ? formatDuree(p.delaiMoyenMs) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
