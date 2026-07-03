@@ -21,7 +21,13 @@ export function TabPrestataires({ ev }: { ev: Evenement }) {
   const { notify, toastEl } = useToast()
 
   async function load() {
-    const { data } = await sb.from('prestataires').select('*').order('raison_sociale')
+    const { data: ue } = await sb.from('user_evenements')
+      .select('prestataire_id')
+      .eq('evenement_id', ev.id)
+      .not('prestataire_id', 'is', null)
+    const ids = [...new Set((ue ?? []).map(u => u.prestataire_id as string))]
+    if (!ids.length) { setPrestataires([]); return }
+    const { data } = await sb.from('prestataires').select('*').in('id', ids).order('raison_sociale')
     setPrestataires(data ?? [])
   }
 
