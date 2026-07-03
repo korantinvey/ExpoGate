@@ -1,5 +1,5 @@
 export type EvenementStatut = 'parametrage' | 'actif' | 'termine'
-export type RoleLocal = 'organisateur' | 'prestataire'
+export type RoleLocal = 'organisateur' | 'controleur' | 'prestataire'
 export type ControleStatut = 'conforme' | 'non_conforme' | 'absent' | 'a_verifier'
 export type McEtat = 'a_traiter' | 'pris_en_charge' | 'resolu'
 
@@ -99,6 +99,13 @@ export interface MainCourante {
   stands?: Pick<Stand, 'numero' | 'nom_exposant'> | null
   users?: Pick<User, 'nom' | 'prenom'> | null
   photos?: { id: string; url: string }[]
+}
+
+export interface ControleurStand {
+  id: string
+  user_evenement_id: string
+  stand_id: string
+  stands?: Pick<Stand, 'numero' | 'nom_exposant' | 'hall'>
 }
 
 export interface UserEvenement {

@@ -298,6 +298,170 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
   )
 }
 
+type ControleurTab = 'dashboard' | 'stands' | 'prestations' | 'main_courante'
+
+export function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
+  const [tab, setTab] = useState<ControleurTab>('dashboard')
+  const [stands, setStands] = useState<(Stand & { prestations: Prestation[] })[]>([])
+  const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
+  const [exportFnStands, setExportFnStands] = useState<(() => void) | null>(null)
+  const [exportFnPresta, setExportFnPresta] = useState<(() => void) | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const { data: acces } = await sb.from('user_evenements')
+        .select('id')
+        .eq('evenement_id', ev.id)
+        .eq('user_id', userId)
+        .single()
+      if (!acces) return
+      const { data: cs } = await sb.from('controleur_stands')
+        .select('stand_id')
+        .eq('user_evenement_id', acces.id)
+      const standIds = (cs ?? []).map((r: { stand_id: string }) => r.stand_id)
+      if (!standIds.length) { setStands([]); return }
+      const { data: standsData } = await sb.from('stands').select('*').in('id', standIds).order('numero')
+      const { data: prests } = await sb.from('prestations')
+        .select('*, stands(numero, nom_exposant), users(nom, prenom)')
+        .in('stand_id', standIds)
+        .eq('deleted', false)
+      const byStand = new Map<string, Stand & { prestations: Prestation[] }>()
+      for (const s of standsData ?? []) byStand.set(s.id, { ...s, prestations: [] })
+      for (const p of prests ?? []) {
+        if (byStand.has(p.stand_id)) byStand.get(p.stand_id)!.prestations.push(p)
+      }
+      setStands(Array.from(byStand.values()))
+    }
+    load()
+  }, [ev.id, userId])
+
+  const allPrestations = stands.flatMap(s => s.prestations)
+  const nbStands = stands.length
+  const nbNonVerif = allPrestations.filter(p => !p.statut_conformite || p.statut_conformite === 'a_verifier').length
+  const nbConforme = allPrestations.filter(p => p.statut_conformite === 'conforme').length
+  const nbNonConforme = allPrestations.filter(p => p.statut_conformite === 'non_conforme').length
+  const nbAbsent = allPrestations.filter(p => p.statut_conformite === 'absent').length
+
+  function onPrestationSaved(updated: Prestation) {
+    setStands(prev => prev.map(s => ({ ...s, prestations: s.prestations.map(p => p.id === updated.id ? updated : p) })))
+  }
+
+  const TAB_LABELS: Record<ControleurTab, string> = {
+    dashboard: 'Tableau de bord',
+    stands: 'Mes stands',
+    prestations: 'Mes prestations',
+    main_courante: 'Main courante',
+  }
+
+  return (
+    <>
+      <div className="tabs" style={{ marginBottom: 20 }}>
+        {(Object.keys(TAB_LABELS) as ControleurTab[]).map(t => (
+          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
+        ))}
+      </div>
+
+      {tab === 'dashboard' && (
+        stands.length === 0 ? (
+          <div className="empty-state">Aucun stand ne vous est affecté sur cet événement.</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+            {[
+              { val: nbStands, label: `Stand${nbStands > 1 ? 's' : ''} affecté${nbStands > 1 ? 's' : ''}`, bg: 'var(--surface)', border: 'var(--border)', color: 'var(--text)', muted: 'var(--text-muted)' },
+              { val: nbNonVerif, label: `Non vérifiée${nbNonVerif > 1 ? 's' : ''}`, bg: 'var(--surface)', border: 'var(--border)', color: 'var(--text-muted)', muted: 'var(--text-muted)' },
+              { val: nbConforme, label: `Conforme${nbConforme > 1 ? 's' : ''}`, bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)', color: 'var(--success)', muted: 'var(--success)' },
+              { val: nbNonConforme, label: `Non conforme${nbNonConforme > 1 ? 's' : ''}`, bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.25)', color: '#f97316', muted: '#f97316' },
+              { val: nbAbsent, label: `Absent${nbAbsent > 1 ? 's' : ''}`, bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)', color: 'var(--danger)', muted: 'var(--danger)' },
+            ].map(({ val, label, bg, border, color, muted }) => (
+              <div key={label} style={{ flex: 1, minWidth: 140, background: bg, border: `1px solid ${border}`, borderRadius: 'var(--radius)', padding: '20px 24px' }}>
+                <div style={{ fontSize: 36, fontWeight: 700, color }}>{val}</div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.8 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {tab === 'stands' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Mes stands</div>
+            <ExportButton onClick={exportFnStands} />
+          </div>
+          <div className="card-body">
+            <DataTable
+              data={stands}
+              exportFilename={`mes-stands-${ev.nom}`}
+              onExportReady={fn => setExportFnStands(() => fn)}
+              onRowClick={() => {}}
+              emptyState={<div className="empty-state">Aucun stand affecté.</div>}
+              columns={[
+                { key: 'numero', label: 'N° stand', sortable: true, filterable: true, render: s => <span style={{ fontWeight: 700, color: 'var(--accent-dark)' }}>{s.numero}</span> },
+                { key: 'nom_exposant', label: 'Exposant', sortable: true, filterable: true },
+                { key: 'hall', label: 'Hall', sortable: true, filterable: true },
+                { key: 'surface', label: 'Surface (m²)', sortable: true },
+                { key: 'prestations', label: 'Prestations', sortable: true, getValue: s => String(s.prestations.length), render: s => <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{s.prestations.length} prestation{s.prestations.length > 1 ? 's' : ''}</span> },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {tab === 'prestations' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Mes prestations</div>
+            <ExportButton onClick={exportFnPresta} />
+          </div>
+          <div className="card-body">
+            <DataTable
+              data={allPrestations}
+              exportFilename={`mes-prestations-${ev.nom}`}
+              onExportReady={fn => setExportFnPresta(() => fn)}
+              onRowClick={p => setEditingPrestation(p)}
+              rowStyle={p => conformiteBg(p.statut_conformite)}
+              emptyState={<div className="empty-state">Aucune prestation sur vos stands.</div>}
+              columns={[
+                { key: 'stand', label: 'Stand', sortable: true, filterable: true, getValue: p => (p.stands as Stand | undefined)?.numero ?? '', render: p => <strong>{(p.stands as Stand | undefined)?.numero ?? '—'}</strong> },
+                { key: 'libelle', label: 'Libellé', sortable: true, filterable: true, render: p => <span style={{ fontWeight: 600 }}>{p.libelle}</span> },
+                { key: 'categorie', label: 'Catégorie', sortable: true, filterable: true },
+                { key: 'quantite_attendue', label: 'Qté', sortable: true },
+                { key: 'statut_conformite', label: 'Conformité', sortable: true, filterable: true,
+                  options: [
+                    { value: 'conforme', label: 'Conforme' },
+                    { value: 'non_conforme', label: 'Non conforme' },
+                    { value: 'absent', label: 'Absent' },
+                    { value: 'a_verifier', label: 'À vérifier' },
+                  ],
+                  render: p => p.statut_conformite
+                    ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
+                    : <span className="text-muted">—</span>,
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {tab === 'main_courante' && <TabMainCourante ev={ev} />}
+
+      {editingPrestation && (
+        <PrestationForm
+          prest={editingPrestation}
+          evenementId={ev.id}
+          onSaved={async () => {
+            const { data } = await sb.from('prestations').select('*, stands(numero, nom_exposant), users(nom, prenom)').eq('id', editingPrestation.id).single()
+            if (data) onPrestationSaved(data)
+            setEditingPrestation(null)
+          }}
+          onGoToStands={() => setEditingPrestation(null)}
+          controleurMode
+        />
+      )}
+    </>
+  )
+}
+
 export function FicheEvenementOrganisateurPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -340,6 +504,8 @@ export function FicheEvenementOrganisateurPage() {
 
       {role === 'organisateur'
         ? <VueOrganisateur ev={ev} onReload={load} />
+        : role === 'controleur'
+        ? <VueControleur ev={ev} userId={user.id} />
         : <VuePrestataire ev={ev} userId={user.id} />
       }
     </>

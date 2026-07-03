@@ -51,8 +51,9 @@ export function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: R
   }
 
   const isPresta = roleFilter === 'prestataire'
-  const title = isPresta ? 'Utilisateurs prestataires' : 'Utilisateurs'
-  const emptyMsg = isPresta ? 'Aucun utilisateur prestataire sur cet événement.' : 'Aucun utilisateur sur cet événement.'
+  const isControleur = roleFilter === 'controleur'
+  const title = isPresta ? 'Utilisateurs prestataires' : isControleur ? 'Contrôleurs' : 'Organisateurs'
+  const emptyMsg = isPresta ? 'Aucun utilisateur prestataire sur cet événement.' : isControleur ? 'Aucun contrôleur sur cet événement.' : 'Aucun organisateur sur cet événement.'
 
   return (
     <>
@@ -101,5 +102,15 @@ export function UserAccesList({ ev, roleFilter }: { ev: Evenement; roleFilter: R
 }
 
 export function TabUtilisateurs({ ev }: { ev: Evenement }) {
-  return <UserAccesList ev={ev} roleFilter="organisateur" />
+  const [subTab, setSubTab] = useState<'organisateurs' | 'controleurs'>('organisateurs')
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button className={`btn btn-sm ${subTab === 'organisateurs' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSubTab('organisateurs')}>Organisateurs</button>
+        <button className={`btn btn-sm ${subTab === 'controleurs' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSubTab('controleurs')}>Contrôleurs</button>
+      </div>
+      {subTab === 'organisateurs' && <UserAccesList ev={ev} roleFilter="organisateur" />}
+      {subTab === 'controleurs' && <UserAccesList ev={ev} roleFilter="controleur" />}
+    </>
+  )
 }

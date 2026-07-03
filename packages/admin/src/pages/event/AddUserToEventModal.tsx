@@ -61,7 +61,7 @@ export function AddUserToEventModal({ evenementId, forcedRole, forcedPrestaId, o
   }
 
   const confirmLabel = step === 'email' ? 'Vérifier' : step === 'found' ? 'Ajouter' : 'Créer et ajouter'
-  const title = forcedRole === 'prestataire' ? 'Ajouter un utilisateur prestataire' : 'Ajouter un utilisateur'
+  const title = forcedRole === 'prestataire' ? 'Ajouter un utilisateur prestataire' : forcedRole === 'controleur' ? 'Ajouter un contrôleur' : 'Ajouter un organisateur'
 
   const PrestaField = () => forcedRole === 'prestataire' && !forcedPrestaId ? (
     <div className="form-group">

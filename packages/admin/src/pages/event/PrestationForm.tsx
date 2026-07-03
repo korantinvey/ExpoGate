@@ -12,7 +12,7 @@ function standLabel(s: { numero: string; nom_exposant?: string | null }) {
   return `${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`
 }
 
-export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, initialStand, readOnly = false, canDelete = false }: {
+export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, initialStand, readOnly = false, canDelete = false, controleurMode = false }: {
   prest: Prestation | null
   evenementId: string
   onSaved: () => void
@@ -20,6 +20,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
   initialStand?: Stand
   readOnly?: boolean
   canDelete?: boolean
+  controleurMode?: boolean
 }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
@@ -166,6 +167,34 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
     try {
       const isOffline = !navigator.onLine
 
+      if (controleurMode) {
+        if (!prest?.id) return false
+        const now = new Date().toISOString()
+        const { data: { user } } = await sb.auth.getUser()
+        const payload: Record<string, unknown> = {
+          statut_conformite: cStatut || null,
+          quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
+          commentaire: cComment || null,
+          controleur_id: user?.id ?? null,
+          date_controle: cStatut ? now : (prest.date_controle ?? null),
+          ...anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now),
+        }
+        const { error } = await sbAdmin.from('prestations').update(payload).eq('id', prest.id)
+        if (error) { setError(error.message); return false }
+        if (newPhotos.length) await uploadPendingPhotos(prest.id)
+        const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
+        if (shouldNotify) {
+          const { data: { session } } = await sb.auth.getSession()
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-non-conformite`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+            body: JSON.stringify({ prestation_id: prest.id }),
+          }).catch(() => {})
+        }
+        notify('Enregistré', 'success')
+        onSaved(); return true
+      }
+
       if (readOnly) {
         if (!prest?.id) return false
         if (isOffline) {
@@ -299,10 +328,19 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
   const roStyle: React.CSSProperties = { background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'not-allowed' }
 
   return (
-    <Modal title={prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
+    <Modal title={controleurMode ? `Contrôle — ${prest?.libelle ?? ''}` : prest ? 'Modifier la prestation' : 'Nouvelle prestation'} confirmLabel={uploading ? 'Enregistrement…' : prest ? 'Enregistrer' : 'Créer'} onClose={onSaved} onConfirm={save}
       footer={canDelete && prest ? <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={async () => { if (!confirm(`Supprimer "${prest.libelle}" ? Elle sera placée dans la corbeille.`)) return; await sb.from('prestations').update({ deleted: true }).eq('id', prest.id); onSaved() }}>Supprimer</button> : undefined}
     >
       <Alert message={error} />
+      {controleurMode && prest && (
+        <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, border: '1px solid var(--border)' }}>
+          <div><strong>{prest.stands?.numero}</strong>{prest.stands?.nom_exposant ? ` — ${prest.stands.nom_exposant}` : ''}</div>
+          <div className="text-muted" style={{ marginTop: 4 }}>
+            {[prest.categorie, `Qté attendue : ${prest.quantite_attendue}`, prest.emplacement_prevu].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      )}
+      {!controleurMode && (<>
       <div className="form-group" style={{ position: 'relative' }}>
         <label>Stand</label>
         <input
@@ -359,6 +397,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           </label>
         </div>
       </div>
+      </>)}
 
       <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Conformité</div>
@@ -367,7 +406,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           <div className="form-group">
             <label>Statut</label>
             <select value={cStatut} onChange={e => setCStatut(e.target.value as ControleStatut | '')}>
-              {readOnly ? (
+              {readOnly && !controleurMode ? (
                 <>
                   {cStatut === '' && <option value="">— Non contrôlée —</option>}
                   {cStatut !== '' && cStatut !== 'a_verifier' && <option value={cStatut}>{STATUT_LABELS[cStatut]}</option>}
@@ -383,13 +422,14 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           </div>
           <div className="form-group">
             <label>Quantité constatée</label>
-            <input type="number" min={0} value={cQte} onChange={e => { if (!readOnly) setCQte(e.target.value) }} placeholder={`Attendue : ${qte}`} readOnly={readOnly} style={readOnly ? roStyle : undefined} />
+            <input type="number" min={0} value={cQte} onChange={e => { if (!readOnly || controleurMode) setCQte(e.target.value) }} placeholder={`Attendue : ${qte}`} readOnly={readOnly && !controleurMode} style={readOnly && !controleurMode ? roStyle : undefined} />
           </div>
           <div className="form-group" style={{ gridColumn: '1/-1' }}>
             <label>Commentaire / observations</label>
-            <input value={cComment} onChange={e => setCComment(e.target.value)} placeholder="Ex: 3 unités présentes, 1 manquante…" readOnly={readOnly} style={readOnly ? roStyle : undefined} />
+            <input value={cComment} onChange={e => setCComment(e.target.value)} placeholder="Ex: 3 unités présentes, 1 manquante…" readOnly={readOnly && !controleurMode} style={readOnly && !controleurMode ? roStyle : undefined} />
           </div>
         </div>
+        {!controleurMode && (
         <div className="form-group" style={{ marginTop: 16 }}>
           <label>Commentaire prestataire</label>
           <textarea
@@ -400,6 +440,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
             style={{ width: '100%', resize: 'vertical' }}
           />
         </div>
+        )}
         <div className="form-group">
           <label>Photos {prest ? '(ajouter)' : '(disponible après création)'}</label>
           {prest && (
