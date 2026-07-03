@@ -364,8 +364,18 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           <div className="form-group">
             <label>Statut</label>
             <select value={cStatut} onChange={e => setCStatut(e.target.value as ControleStatut | '')}>
-              <option value="">— Non contrôlée —</option>
-              {(Object.keys(STATUT_LABELS) as ControleStatut[]).map(s => <option key={s} value={s}>{STATUT_LABELS[s]}</option>)}
+              {readOnly ? (
+                <>
+                  {cStatut === '' && <option value="">— Non contrôlée —</option>}
+                  {cStatut !== '' && cStatut !== 'a_verifier' && <option value={cStatut}>{STATUT_LABELS[cStatut]}</option>}
+                  <option value="a_verifier">{STATUT_LABELS.a_verifier}</option>
+                </>
+              ) : (
+                <>
+                  <option value="">— Non contrôlée —</option>
+                  {(Object.keys(STATUT_LABELS) as ControleStatut[]).map(s => <option key={s} value={s}>{STATUT_LABELS[s]}</option>)}
+                </>
+              )}
             </select>
           </div>
           <div className="form-group">
