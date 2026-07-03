@@ -104,6 +104,9 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
           }
+          if ((cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest.statut_conformite) {
+            await db.pending_notifications.put({ prestation_id: prest.id })
+          }
         } else {
           const newId = crypto.randomUUID()
           await db.prestations.add({
@@ -118,6 +121,9 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
           })
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: newId, blob: file, created_at: now, synced: 0, remote_url: null })
+          }
+          if (cStatut === 'non_conforme' || cStatut === 'absent') {
+            await db.pending_notifications.put({ prestation_id: newId })
           }
         }
         onSaved(); return true

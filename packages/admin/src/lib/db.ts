@@ -78,6 +78,10 @@ export interface LocalPrestataire {
   telephone: string | null
 }
 
+export interface LocalPendingNotification {
+  prestation_id: string
+}
+
 class ExpoGateDB extends Dexie {
   evenements!: Table<LocalEvenement, string>
   stands!: Table<LocalStand, string>
@@ -86,6 +90,7 @@ class ExpoGateDB extends Dexie {
   main_courante!: Table<LocalMainCourante, string>
   mc_photos!: Table<LocalMcPhoto, number>
   prestataires!: Table<LocalPrestataire, string>
+  pending_notifications!: Table<LocalPendingNotification, string>
 
   constructor() {
     super('expogate')
@@ -104,6 +109,9 @@ class ExpoGateDB extends Dexie {
     })
     this.version(4).stores({
       prestataires: 'id',
+    })
+    this.version(5).stores({
+      pending_notifications: 'prestation_id',
     })
   }
 }

@@ -93,6 +93,32 @@ export async function syncPending(): Promise<number> {
     }
   }))
 
+  // Envoi des notifications différées (non-conformité/absent saisies hors ligne)
+  const pendingNotifs = await db.pending_notifications.toArray()
+  if (pendingNotifs.length) {
+    const { data: { session } } = await sb.auth.getSession()
+    if (session?.access_token) {
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+      const notifUrl = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/notify-non-conformite`
+      for (const notif of pendingNotifs) {
+        const p = await db.prestations.get(notif.prestation_id)
+        if (p?.pending_sync === 1) continue
+        try {
+          const res = await fetch(notifUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+              'apikey': anonKey,
+            },
+            body: JSON.stringify({ prestation_id: notif.prestation_id }),
+          })
+          if (res.ok) await db.pending_notifications.delete(notif.prestation_id)
+        } catch { /* sera réessayé à la prochaine sync */ }
+      }
+    }
+  }
+
   // Sync des entrées main courante créées/modifiées hors ligne
   const pendingMcs = await db.main_courante.where('pending_sync').equals(1).toArray()
   await Promise.allSettled(pendingMcs.map(async mc => {
