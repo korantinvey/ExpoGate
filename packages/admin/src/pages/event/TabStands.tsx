@@ -122,11 +122,6 @@ export function TabStands({ ev }: { ev: Evenement }) {
     { key: 'numero', label: 'N° de stand', sortable: true, filterable: true },
     { key: 'surface', label: 'Surface (m²)', sortable: true, hideOnMobile: true },
     { key: 'angles', label: 'Angles', sortable: true, hideOnMobile: true },
-    { key: 'prestations', label: '', render: (s: StandAvecStatut) => (
-      <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); setViewingPrestations(s as Stand) }}>
-        Prestations
-      </button>
-    )},
   ]
 
   return (
@@ -196,7 +191,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
             data={standsFiltrés}
             exportFilename={`stands-${ev.nom}-${sousOnglet}`}
             onExportReady={fn => setExportFn(() => fn)}
-            onRowClick={s => setModal(s)}
+            onRowClick={s => setViewingPrestations(s as Stand)}
             selectable
             selectedIds={selectedStandIds}
             onSelectionChange={setSelectedStandIds}
@@ -214,13 +209,13 @@ export function TabStands({ ev }: { ev: Evenement }) {
       </div>
 
       {modal !== null && (
-        <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete />
+        <StandForm stand={null} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete />
       )}
       {importing && (
         <ImportStandsModal evenementId={ev.id} nomEvenement={ev.nom} onDone={() => { setImporting(false); load() }} />
       )}
       {viewingPrestations && (
-        <StandPrestationsModal stand={viewingPrestations} evenementId={ev.id} onClose={() => { setViewingPrestations(null); load() }} />
+        <StandPrestationsModal stand={viewingPrestations} evenementId={ev.id} onClose={() => { setViewingPrestations(null); load() }} onStandSaved={() => load()} />
       )}
     </>
   )

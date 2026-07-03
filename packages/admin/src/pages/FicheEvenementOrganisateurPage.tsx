@@ -274,6 +274,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
           stand={viewingPrestations}
           onClose={() => setViewingPrestations(null)}
           onEditPrestation={p => setEditingPrestation(p)}
+          showStandTab={false}
         />
       )}
       {editingPrestation && (
