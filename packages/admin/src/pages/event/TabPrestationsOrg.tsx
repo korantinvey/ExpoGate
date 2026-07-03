@@ -61,11 +61,17 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
   useEffect(() => { load() }, [])
   useEffect(() => {
     db.prestataires.orderBy('raison_sociale').toArray().then(local => { if (local.length) setBulkPrestataires(local as unknown as Prestataire[]) })
-    sb.from('prestataires').select('*').order('raison_sociale').then(({ data }) => {
-      if (!data) return
-      setBulkPrestataires(data)
-      db.prestataires.bulkPut(data.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
-    })
+    sb.from('evenement_prestataires')
+      .select('prestataires(id, raison_sociale, email_contact, telephone, created_at)')
+      .eq('evenement_id', ev.id)
+      .then(({ data }) => {
+        if (!data) return
+        const p = data.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+        if (p.length) {
+          setBulkPrestataires(p)
+          db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+        }
+      })
   }, [])
 
   async function applyBulkPrestations() {

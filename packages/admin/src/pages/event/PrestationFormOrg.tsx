@@ -55,29 +55,31 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
 
-      // Mise à jour réseau en arrière-plan (les deux fetches sont indépendants)
-      try {
-        const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
-        if (s) {
-          setStands(s)
-          if (!prest?.stand_id && s.length) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
-          if (prest?.stand_id) {
-            const found = s.find(st => st.id === prest.stand_id)
-            if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
-          }
-        }
-      } catch { /* hors ligne */ }
-      setStandsLoading(false)
-      try {
-        const { data: epRows } = await sb.from('evenement_prestataires')
+      // Stands et prestataires en parallèle
+      const [standsRes, epRes] = await Promise.allSettled([
+        sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
+        sb.from('evenement_prestataires')
           .select('prestataires(id, raison_sociale, email_contact, telephone, created_at)')
-          .eq('evenement_id', evenementId)
-        if (epRows) {
-          const p = epRows.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+          .eq('evenement_id', evenementId),
+      ])
+      if (standsRes.status === 'fulfilled' && standsRes.value.data) {
+        const s = standsRes.value.data
+        setStands(s)
+        if (!prest?.stand_id && s.length) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
+        if (prest?.stand_id) {
+          const found = s.find(st => st.id === prest.stand_id)
+          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+        }
+      }
+      setStandsLoading(false)
+      if (epRes.status === 'fulfilled' && epRes.value.data) {
+        const epRows = epRes.value.data
+        const p = epRows.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+        if (p.length) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
         }
-      } catch { /* hors ligne */ }
+      }
     }
     loadForm()
     if (prest?.id) {
