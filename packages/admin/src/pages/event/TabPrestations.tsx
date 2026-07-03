@@ -57,7 +57,7 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
 
   useEffect(() => { load() }, [])
   useEffect(() => {
-    db.prestataires.orderBy('raison_sociale').toArray().then(local => { if (local.length) setBulkPrestataires(local as unknown as Prestataire[]) })
+    db.prestataires.toArray().then(local => { if (local.length) setBulkPrestataires(local.sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr')) as unknown as Prestataire[]) })
     sb.from('evenement_prestataires').select('prestataire_id, prestataires(id, raison_sociale, email_contact, telephone)').eq('evenement_id', ev.id)
       .then(({ data }) => {
         if (!data?.length) return

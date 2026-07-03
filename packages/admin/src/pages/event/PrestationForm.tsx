@@ -50,42 +50,48 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
 
   useEffect(() => {
     async function loadForm() {
-      // Dexie fallback
-      const [localStands, localPrestataires] = await Promise.all([
-        db.stands.where('evenement_id').equals(evenementId).toArray(),
-        db.prestataires.orderBy('raison_sociale').toArray(),
-      ])
-      if (localStands.length) {
-        const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
-        setStands(s)
-        if (!prest?.stand_id && !initialStand && !userEditedStand.current) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
-        setStandsLoading(false)
-      }
-      if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
+      // Dexie fallback (toArray sans orderBy car raison_sociale n'est pas indexé)
+      try {
+        const [localStands, localPrestataires] = await Promise.all([
+          db.stands.where('evenement_id').equals(evenementId).toArray(),
+          db.prestataires.toArray(),
+        ])
+        if (localStands.length) {
+          const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
+          setStands(s)
+          if (!prest?.stand_id && !initialStand && !userEditedStand.current) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
+          setStandsLoading(false)
+        }
+        if (localPrestataires.length) setPrestataires(localPrestataires.sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr')) as unknown as Prestataire[])
+      } catch { /* données locales indisponibles, on continue avec le réseau */ }
 
       // Network: stands
-      const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
-      if (standsData) {
-        setStands(standsData)
-        if (!prest?.stand_id && !initialStand && !userEditedStand.current && standsData.length) { setStandId(standsData[0].id); setStandSearch(standLabel(standsData[0])) }
-      }
+      try {
+        const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
+        if (standsData) {
+          setStands(standsData)
+          if (!prest?.stand_id && !initialStand && !userEditedStand.current && standsData.length) { setStandId(standsData[0].id); setStandSearch(standLabel(standsData[0])) }
+        }
+      } catch { /* réseau indisponible */ }
       setStandsLoading(false)
 
-      // Network: prestataires — deux requêtes directes via sbAdmin (bypass RLS)
-      const { data: ep } = await sbAdmin.from('evenement_prestataires')
-        .select('prestataire_id')
-        .eq('evenement_id', evenementId)
-      const ids = (ep ?? []).map((r: { prestataire_id: string }) => r.prestataire_id).filter(Boolean)
-      if (ids.length) {
-        const { data: p } = await sbAdmin.from('prestataires')
-          .select('id, raison_sociale, email_contact, telephone')
-          .in('id', ids)
-          .order('raison_sociale')
-        if (p?.length) {
-          setPrestataires(p as unknown as Prestataire[])
-          db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }: { id: string; raison_sociale: string; email_contact: string | null; telephone: string | null }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+      // Network: prestataires via sbAdmin (bypass RLS)
+      try {
+        const { data: ep } = await sbAdmin.from('evenement_prestataires')
+          .select('prestataire_id')
+          .eq('evenement_id', evenementId)
+        const ids = (ep ?? []).map((r: { prestataire_id: string }) => r.prestataire_id).filter(Boolean)
+        if (ids.length) {
+          const { data: p } = await sbAdmin.from('prestataires')
+            .select('id, raison_sociale, email_contact, telephone')
+            .in('id', ids)
+            .order('raison_sociale')
+          if (p?.length) {
+            setPrestataires(p as unknown as Prestataire[])
+            db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }: { id: string; raison_sociale: string; email_contact: string | null; telephone: string | null }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+          }
         }
-      }
+      } catch { /* réseau indisponible */ }
     }
     loadForm()
     if (prest?.id) {
