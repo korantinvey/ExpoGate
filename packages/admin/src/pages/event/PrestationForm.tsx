@@ -65,11 +65,9 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
 
-      const [standsRes, epRes] = await Promise.allSettled([
+      const [standsRes, prestaRes] = await Promise.allSettled([
         sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
-        sb.from('evenement_prestataires')
-          .select('prestataires(id, raison_sociale, email_contact, telephone, created_at)')
-          .eq('evenement_id', evenementId),
+        sb.from('prestataires').select('id, raison_sociale, email_contact, telephone, created_at').order('raison_sociale'),
       ])
       if (standsRes.status === 'fulfilled' && standsRes.value.data) {
         const s = standsRes.value.data
@@ -81,8 +79,8 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         }
       }
       setStandsLoading(false)
-      if (epRes.status === 'fulfilled' && epRes.value.data) {
-        const p = epRes.value.data.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+      if (prestaRes.status === 'fulfilled' && prestaRes.value.data) {
+        const p = prestaRes.value.data as Prestataire[]
         if (p.length) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
