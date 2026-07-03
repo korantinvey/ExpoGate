@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { sb } from '../../lib/supabase'
+import { sb, sbAdmin } from '../../lib/supabase'
 import { db, getPendingStandIds } from '../../lib/db'
 import { SyncDot } from '../../components/ui/SyncDot'
 import { ImportButton } from '../../components/ui/ImportButton'
@@ -25,6 +25,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
   const [bulkField, setBulkField] = useState<BulkStandField>('hall')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
+  const [controleurs, setControleurs] = useState<{ id: string; users: { nom: string; prenom: string } | null }[]>([])
   const { notify: bulkNotify } = useToast()
 
   async function load() {
@@ -85,6 +86,14 @@ export function TabStands({ ev }: { ev: Evenement }) {
 
   useEffect(() => { load() }, [])
 
+  useEffect(() => {
+    sb.from('user_evenements')
+      .select('id, users(nom, prenom)')
+      .eq('evenement_id', ev.id)
+      .eq('role_local', 'controleur')
+      .then(({ data }) => setControleurs((data ?? []).map(c => ({ id: c.id as string, users: Array.isArray(c.users) ? (c.users[0] ?? null) : c.users }))))
+  }, [ev.id])
+
   const standsFiltrés = sousOnglet === 'tous' ? stands
     : sousOnglet === 'valide' ? stands.filter(s => s._statut === 'valide')
     : stands.filter(s => s._statut !== 'valide')
@@ -95,6 +104,18 @@ export function TabStands({ ev }: { ev: Evenement }) {
   async function applyBulkStands() {
     if (!bulkStandIds.size) return
     setBulkApplying(true)
+
+    if (bulkField === 'controleur') {
+      if (!bulkValue) { bulkNotify('Sélectionnez un contrôleur.', 'error'); setBulkApplying(false); return }
+      const rows = [...bulkStandIds].map(standId => ({ user_evenement_id: bulkValue, stand_id: standId }))
+      const { error } = await sbAdmin.from('controleur_stands').upsert(rows, { onConflict: 'user_evenement_id,stand_id' })
+      setBulkApplying(false)
+      if (error) { bulkNotify(error.message, 'error'); return }
+      bulkNotify(`${bulkStandIds.size} stand${bulkStandIds.size > 1 ? 's' : ''} affecté${bulkStandIds.size > 1 ? 's' : ''} au contrôleur`, 'success')
+      setSelectedStandIds(new Set())
+      return
+    }
+
     const patch: Record<string, unknown> = {}
     if (bulkField === 'hall') patch.hall = bulkValue || null
     else if (bulkField === 'nom_exposant') patch.nom_exposant = bulkValue || null
@@ -171,8 +192,15 @@ export function TabStands({ ev }: { ev: Evenement }) {
                 <option value="nom_exposant">Exposant</option>
                 <option value="surface">Surface (m²)</option>
                 <option value="angles">Angles</option>
+                {controleurs.length > 0 && <option value="controleur">Affecter un contrôleur</option>}
               </select>
-              {(bulkField === 'surface' || bulkField === 'angles') ? (
+              {bulkField === 'controleur' ? (
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)}
+                  style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', minWidth: 160 }}>
+                  <option value="">— Choisir un contrôleur —</option>
+                  {controleurs.map(c => <option key={c.id} value={c.id}>{c.users?.prenom} {c.users?.nom}</option>)}
+                </select>
+              ) : (bulkField === 'surface' || bulkField === 'angles') ? (
                 <input type="number" min={0} value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="Valeur…"
                   style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, width: 90 }} />
               ) : (

@@ -8,7 +8,7 @@ export function categoriserStand(stand: Stand, prestsByStand: Record<string, { s
   return { ...stand, _statut: prests.every(p => p.statut_conformite === 'conforme') ? 'valide' : 'a_valider' }
 }
 
-export type BulkStandField = 'hall' | 'nom_exposant' | 'surface' | 'angles'
+export type BulkStandField = 'hall' | 'nom_exposant' | 'surface' | 'angles' | 'controleur'
 export type BulkPrestaField = 'prestataire_id' | 'categorie' | 'emplacement_prevu' | 'ajout_sur_site'
 
 export type UnknownPresta = { value: string; action: 'create' | 'map'; mappedId: string }
