@@ -7,7 +7,11 @@ import { compressImage } from '../../lib/compressImage'
 import type { Prestation, Stand, Prestataire, ControleStatut } from '../../types'
 import { STATUT_LABELS } from './helpers'
 
-export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands }: { prest: Prestation | null; evenementId: string; onSaved: () => void; onGoToStands: () => void }) {
+function standLabel(s: { numero: string; nom_exposant?: string | null }) {
+  return `${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`
+}
+
+export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands, initialStand }: { prest: Prestation | null; evenementId: string; onSaved: () => void; onGoToStands: () => void; initialStand?: Stand }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
   const [standsLoading, setStandsLoading] = useState(true)
@@ -19,7 +23,7 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
   const [prestaId, setPrestaId] = useState(prest?.prestataire_id ?? '')
   const [ajoutSurSite, setAjoutSurSite] = useState(prest?.ajout_sur_site ?? false)
   const [error, setError] = useState('')
-  const [standSearch, setStandSearch] = useState(() => prest?.stand_id ? '' : '')
+  const [standSearch, setStandSearch] = useState(() => initialStand ? standLabel(initialStand) : '')
   const [cStatut, setCStatut] = useState<ControleStatut | ''>(prest?.statut_conformite ?? '')
   const [cQte, setCQte] = useState<string>(prest?.quantite_constatee != null ? String(prest.quantite_constatee) : '')
   const [cComment, setCComment] = useState(prest?.commentaire ?? '')
@@ -48,18 +52,18 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands 
       setStandsLoading(false)
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
       try {
-        const [{ data: s }, { data: p }] = await Promise.all([
-          sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
-          sb.from('prestataires').select('*').order('raison_sociale'),
-        ])
+        const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
         if (s) {
           setStands(s)
           if (!prest?.stand_id && s.length) setStandId(s[0].id)
           if (prest?.stand_id) {
             const found = s.find(st => st.id === prest.stand_id)
-            if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+            if (found) setStandSearch(standLabel(found))
           }
         }
+      } catch { /* données locales déjà affichées */ }
+      try {
+        const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
         if (p) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})

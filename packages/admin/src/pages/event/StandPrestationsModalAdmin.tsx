@@ -27,6 +27,7 @@ export function StandPrestationsModal({ stand, evenementId, onClose }: { stand: 
         evenementId={evenementId}
         onSaved={() => { setEditing(null); load() }}
         onGoToStands={() => setEditing(null)}
+        initialStand={editing !== 'new' ? stand : undefined}
       />
     )
   }
