@@ -41,16 +41,19 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
         db.prestataires.orderBy('raison_sociale').toArray(),
       ])
       if (localStands.length) {
+        // Dexie a des données : on les affiche immédiatement et on débloque le guard
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
         if (!prest?.stand_id) setStandId(s[0].id)
         if (prest?.stand_id) {
           const found = s.find(st => st.id === prest.stand_id)
-          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+          if (found) setStandSearch(standLabel(found))
         }
+        setStandsLoading(false)
       }
-      setStandsLoading(false)
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
+
+      // Fetch réseau des stands (débloque le guard si Dexie était vide)
       try {
         const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
         if (s) {
@@ -61,7 +64,11 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
             if (found) setStandSearch(standLabel(found))
           }
         }
-      } catch { /* données locales déjà affichées */ }
+      } catch { /* hors ligne : données Dexie déjà affichées */ }
+      // Dans tous les cas on débloque le guard (même si les deux sources sont vides)
+      setStandsLoading(false)
+
+      // Fetch réseau des prestataires (indépendant des stands)
       try {
         const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
         if (p) {

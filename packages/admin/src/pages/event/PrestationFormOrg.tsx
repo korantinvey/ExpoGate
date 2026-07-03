@@ -44,6 +44,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
         db.prestataires.orderBy('raison_sociale').toArray(),
       ])
       if (localStands.length) {
+        // Dexie a des données : on les affiche immédiatement et on débloque le guard
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
         if (!prest?.stand_id) setStandId(s[0].id)
@@ -51,14 +52,13 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
           const found = s.find(st => st.id === prest.stand_id)
           if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
         }
+        setStandsLoading(false)
       }
-      setStandsLoading(false)
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
+
+      // Fetch réseau des stands (débloque le guard si Dexie était vide)
       try {
-        const [{ data: s }, { data: p }] = await Promise.all([
-          sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
-          sb.from('prestataires').select('*').order('raison_sociale'),
-        ])
+        const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
         if (s) {
           setStands(s)
           if (!prest?.stand_id && s.length) setStandId(s[0].id)
@@ -67,6 +67,13 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
             if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
           }
         }
+      } catch { /* hors ligne : données Dexie déjà affichées */ }
+      // Dans tous les cas on débloque le guard (même si les deux sources sont vides)
+      setStandsLoading(false)
+
+      // Fetch réseau des prestataires (indépendant des stands)
+      try {
+        const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
         if (p) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
