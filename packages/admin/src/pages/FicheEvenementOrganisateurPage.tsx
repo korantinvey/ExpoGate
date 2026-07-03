@@ -163,6 +163,10 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
 
   function onPrestationSaved(updated: Prestation) {
     setStands(prev => prev.map(s => ({ ...s, prestations: s.prestations.map(p => p.id === updated.id ? updated : p) })))
+    setViewingPrestations(prev => {
+      if (!prev || prev.id !== updated.stand_id) return prev
+      return { ...prev, prestations: prev.prestations.map(p => p.id === updated.id ? updated : p) }
+    })
   }
 
   return (
