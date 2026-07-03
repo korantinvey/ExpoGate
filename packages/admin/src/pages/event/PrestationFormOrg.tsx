@@ -46,27 +46,28 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
       if (localStands.length) {
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
-        if (!prest?.stand_id) setStandId(s[0].id)
+        if (!prest?.stand_id) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
         if (prest?.stand_id) {
           const found = s.find(st => st.id === prest.stand_id)
           if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
         }
+        setStandsLoading(false)
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
-      setStandsLoading(false)
 
       // Mise à jour réseau en arrière-plan (les deux fetches sont indépendants)
       try {
         const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
         if (s) {
           setStands(s)
-          if (!prest?.stand_id && s.length) setStandId(s[0].id)
+          if (!prest?.stand_id && s.length) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
           if (prest?.stand_id) {
             const found = s.find(st => st.id === prest.stand_id)
             if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
           }
         }
       } catch { /* hors ligne */ }
+      setStandsLoading(false)
       try {
         const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
         if (p) {
@@ -88,7 +89,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
     return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
   }, [newPhotos])
 
-  if (!standsLoading && stands.length === 0) {
+  if (!standsLoading && stands.length === 0 && !standId) {
     return (
       <Modal title="Aucun stand disponible" confirmLabel="Aller aux stands" onClose={onSaved} onConfirm={async () => { onGoToStands(); return true }}>
         <p>Vous devez d'abord ajouter des stands à cet événement.</p>
