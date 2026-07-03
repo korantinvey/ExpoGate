@@ -23,7 +23,11 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
   const [prestaId, setPrestaId] = useState(prest?.prestataire_id ?? '')
   const [ajoutSurSite, setAjoutSurSite] = useState(prest?.ajout_sur_site ?? false)
   const [error, setError] = useState('')
-  const [standSearch, setStandSearch] = useState(() => initialStand ? standLabel(initialStand) : '')
+  const [standSearch, setStandSearch] = useState(() => {
+    if (initialStand) return standLabel(initialStand)
+    if (prest?.stands) return standLabel(prest.stands)
+    return ''
+  })
   const [cStatut, setCStatut] = useState<ControleStatut | ''>(prest?.statut_conformite ?? '')
   const [cQte, setCQte] = useState<string>(prest?.quantite_constatee != null ? String(prest.quantite_constatee) : '')
   const [cComment, setCComment] = useState(prest?.commentaire ?? '')
@@ -41,7 +45,6 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
         db.prestataires.orderBy('raison_sociale').toArray(),
       ])
       if (localStands.length) {
-        // Dexie a des données : on les affiche immédiatement et on débloque le guard
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
         if (!prest?.stand_id) setStandId(s[0].id)
@@ -49,11 +52,11 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
           const found = s.find(st => st.id === prest.stand_id)
           if (found) setStandSearch(standLabel(found))
         }
-        setStandsLoading(false)
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
+      setStandsLoading(false)
 
-      // Fetch réseau des stands (débloque le guard si Dexie était vide)
+      // Mise à jour réseau en arrière-plan (les deux fetches sont indépendants)
       try {
         const { data: s } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
         if (s) {
@@ -64,18 +67,14 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
             if (found) setStandSearch(standLabel(found))
           }
         }
-      } catch { /* hors ligne : données Dexie déjà affichées */ }
-      // Dans tous les cas on débloque le guard (même si les deux sources sont vides)
-      setStandsLoading(false)
-
-      // Fetch réseau des prestataires (indépendant des stands)
+      } catch { /* hors ligne */ }
       try {
         const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
         if (p) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
         }
-      } catch { /* données locales déjà affichées */ }
+      } catch { /* hors ligne */ }
     }
     loadForm()
     if (prest?.id) {
