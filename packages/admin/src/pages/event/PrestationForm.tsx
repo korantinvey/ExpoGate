@@ -139,6 +139,26 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
     setPhotos(prev => prev.filter(u => u !== url))
   }
 
+  function anomaliePatch(
+    prevStatut: ControleStatut | null | undefined,
+    newStatut: ControleStatut | string | null | undefined,
+    currentAnomalie: boolean | undefined,
+    currentDateAnomalie: string | null | undefined,
+    currentDateRetour: string | null | undefined,
+    now: string,
+  ): Record<string, unknown> {
+    const patch: Record<string, unknown> = {}
+    const isAnomalie = (s: string | null | undefined) => s === 'non_conforme' || s === 'absent'
+    if (isAnomalie(newStatut)) {
+      if (!currentAnomalie) patch.anomalie = true
+      if (!currentDateAnomalie) patch.date_anomalie = now
+    }
+    if (newStatut === 'a_verifier' && isAnomalie(prevStatut) && !currentDateRetour) {
+      patch.date_retour_a_verifier = now
+    }
+    return patch
+  }
+
   async function save(): Promise<boolean> {
     setUploading(true)
     try {
@@ -148,20 +168,24 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         if (!prest?.id) return false
         if (isOffline) {
           const now = new Date().toISOString()
+          const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
           await db.prestations.update(prest.id, {
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, date_controle: now } : {}),
+            ...aPatch,
             pending_sync: 1,
           })
           onSaved(); return true
         }
         const { data: { user } } = await sb.auth.getUser()
+        const now = new Date().toISOString()
         const payload: Record<string, unknown> = { commentaire_prestataire: commentairePrestataire || null }
         if (cStatut) {
           payload.statut_conformite = cStatut
           payload.quantite_constatee = cQte !== '' ? parseInt(cQte) : null
           payload.controleur_id = user?.id ?? null
-          payload.date_controle = new Date().toISOString()
+          payload.date_controle = now
+          Object.assign(payload, anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now))
         }
         const { error } = await sb.from('prestations').update(payload).eq('id', prest.id)
         if (error) { setError(error.message); return false }
@@ -182,12 +206,14 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       if (isOffline) {
         const now = new Date().toISOString()
         if (prest?.id) {
+          const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
           await db.prestations.update(prest.id, {
             stand_id: standId, libelle, categorie: categorie || null,
             quantite_attendue: qte, emplacement_prevu: emplacement || null,
             prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
+            ...aPatch,
             pending_sync: 1,
           })
           for (const file of newPhotos) {
@@ -198,6 +224,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           }
         } else {
           const newId = crypto.randomUUID()
+          const isFirstAnomalie = cStatut === 'non_conforme' || cStatut === 'absent'
           await db.prestations.add({
             id: newId, stand_id: standId, prestataire_id: prestaId || null,
             libelle, categorie: categorie || null, quantite_attendue: qte,
@@ -206,12 +233,16 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
             statut_conformite: cStatut ? cStatut as ControleStatut : null,
             quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
             commentaire: cComment || null, controleur_id: null,
-            date_controle: cStatut ? now : null, pending_sync: 1,
+            date_controle: cStatut ? now : null,
+            anomalie: isFirstAnomalie,
+            date_anomalie: isFirstAnomalie ? now : null,
+            date_retour_a_verifier: null,
+            pending_sync: 1,
           })
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: newId, blob: file, created_at: now, synced: 0, remote_url: null })
           }
-          if (cStatut === 'non_conforme' || cStatut === 'absent') {
+          if (isFirstAnomalie) {
             await db.pending_notifications.put({ prestation_id: newId })
           }
         }
@@ -219,19 +250,24 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       }
 
       const { data: { user } } = await sb.auth.getUser()
+      const now = new Date().toISOString()
+      const isFirstAnomalie = (cStatut === 'non_conforme' || cStatut === 'absent')
       const conformitePayload = cStatut ? {
         statut_conformite: cStatut,
         quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
         commentaire: cComment || null,
         controleur_id: user?.id ?? null,
-        date_controle: new Date().toISOString(),
+        date_controle: now,
+        ...anomaliePatch(prest?.statut_conformite, cStatut, prest?.anomalie, prest?.date_anomalie, prest?.date_retour_a_verifier, now),
       } : {}
+      const newPrestAnomalie = !prest && isFirstAnomalie ? { anomalie: true, date_anomalie: now } : {}
       const payload: Record<string, unknown> = {
         stand_id: standId, libelle, categorie: categorie || null,
         quantite_attendue: qte, emplacement_prevu: emplacement || null,
         prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
         commentaire_prestataire: commentairePrestataire || null,
         ...conformitePayload,
+        ...newPrestAnomalie,
       }
       let savedId = prest?.id
       if (prest) {
