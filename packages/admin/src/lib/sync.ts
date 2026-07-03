@@ -20,7 +20,7 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
   const standIds = stands.map(s => s.id)
   const { data: rawPrestations, error: prestsErr } = standIds.length
     ? await sb.from('prestations')
-        .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, commentaire_prestataire, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle')
+        .select('id, stand_id, prestataire_id, libelle, categorie, quantite_attendue, emplacement_prevu, ajout_sur_site, commentaire_prestataire, statut_conformite, quantite_constatee, commentaire, controleur_id, date_controle, anomalie, date_anomalie, date_retour_a_verifier')
         .in('stand_id', standIds)
         .eq('deleted', false)
     : { data: [], error: null }
@@ -93,6 +93,9 @@ export async function syncPending(): Promise<number> {
       commentaire: p.commentaire,
       controleur_id: p.controleur_id,
       date_controle: p.date_controle,
+      anomalie: p.anomalie ?? false,
+      date_anomalie: p.date_anomalie ?? null,
+      date_retour_a_verifier: p.date_retour_a_verifier ?? null,
     }, { onConflict: 'id' })
     if (!error) {
       await db.prestations.update(p.id, { pending_sync: 0 })

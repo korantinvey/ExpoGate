@@ -65,6 +65,10 @@ export interface Prestation {
   commentaire_prestataire: string | null
   controleur_id: string | null
   date_controle: string | null
+  // Suivi anomalies
+  anomalie: boolean
+  date_anomalie: string | null
+  date_retour_a_verifier: string | null
   deleted?: boolean
   // Jointures
   stands?: Pick<Stand, 'numero' | 'nom_exposant'>

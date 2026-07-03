@@ -38,6 +38,9 @@ export interface LocalPrestation {
   commentaire: string | null
   controleur_id: string | null
   date_controle: string | null
+  anomalie?: boolean
+  date_anomalie?: string | null
+  date_retour_a_verifier?: string | null
   pending_sync: 0 | 1
 }
 

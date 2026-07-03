@@ -65,14 +65,29 @@ function ControlForm({ prest, userId, onSaved, onCancel }: ControlFormProps) {
     setSaving(true)
     try {
       const now = new Date().toISOString()
-      await db.prestations.update(prest.id, {
-        statut_conformite: statut || null,
+      const prevStatut = prest.statut_conformite
+      const newStatut: ControleStatut | null = statut || null
+      const isAnomalie = (s: ControleStatut | null) => s === 'non_conforme' || s === 'absent'
+
+      const updates: Record<string, unknown> = {
+        statut_conformite: newStatut,
         quantite_constatee: qte !== '' ? parseInt(qte) : null,
         commentaire: comment || null,
         controleur_id: userId,
         date_controle: now,
         pending_sync: 1,
-      })
+      }
+
+      if (isAnomalie(newStatut)) {
+        if (!prest.anomalie) updates.anomalie = true
+        if (!prest.date_anomalie) updates.date_anomalie = now
+      }
+
+      if (newStatut === 'a_verifier' && isAnomalie(prevStatut) && !prest.date_retour_a_verifier) {
+        updates.date_retour_a_verifier = now
+      }
+
+      await db.prestations.update(prest.id, updates)
       // Stocker les photos en local
       for (const file of newPhotos) {
         await db.photos.add({

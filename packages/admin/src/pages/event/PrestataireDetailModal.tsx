@@ -109,33 +109,70 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Prestations sur cet événement</div>
           {prestations.length === 0 ? (
             <div className="text-muted" style={{ fontSize: 13 }}>Aucune prestation assignée.</div>
-          ) : (
-            <table style={{ width: '100%', fontSize: 13 }}>
-              <thead><tr>
-                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Stand</th>
-                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Libellé</th>
-                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Conformité</th>
-              </tr></thead>
-              <tbody>
-                {prestations.map(p => (
-                  <tr key={p.id} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)', ...conformiteBg(p.statut_conformite) }} onClick={() => setEditingPrestation(p)}>
-                    <td style={{ padding: '8px 8px 8px 0', fontWeight: 600 }}>{p.stands?.numero}{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td>
-                    <td style={{ padding: '8px 8px 8px 0' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <SyncDot pending={pendingSyncIds.has(p.id)} />
-                        {p.libelle}
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px 0' }}>
-                      {p.statut_conformite
-                        ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
-                        : <span className="text-muted">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          ) : (() => {
+            const total = prestations.length
+            const avecAnomalie = prestations.filter(p => p.anomalie).length
+            const tauxAnomalie = Math.round((avecAnomalie / total) * 100)
+            const delaisMs = prestations
+              .filter(p => p.date_anomalie && p.date_retour_a_verifier)
+              .map(p => new Date(p.date_retour_a_verifier!).getTime() - new Date(p.date_anomalie!).getTime())
+            const delaiMoyenMs = delaisMs.length > 0 ? delaisMs.reduce((a, b) => a + b, 0) / delaisMs.length : null
+            function formatDuree(ms: number): string {
+              const h = Math.floor(ms / 3600000)
+              const m = Math.floor((ms % 3600000) / 60000)
+              if (h >= 24) { const j = Math.floor(h / 24); const hr = h % 24; return hr > 0 ? `${j}j ${hr}h` : `${j}j` }
+              return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`
+            }
+            return (
+              <>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px', background: 'var(--bg)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Taux d'anomalie</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: avecAnomalie > 0 ? 'var(--danger)' : 'var(--success)' }}>{tauxAnomalie}%</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{avecAnomalie} / {total} prestation{total > 1 ? 's' : ''}</div>
+                  </div>
+                  {delaiMoyenMs !== null && (
+                    <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Délai moy. remise en conformité</div>
+                      <div style={{ fontSize: 24, fontWeight: 700 }}>{formatDuree(delaiMoyenMs)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>sur {delaisMs.length} prestation{delaisMs.length > 1 ? 's' : ''}</div>
+                    </div>
+                  )}
+                </div>
+                <table style={{ width: '100%', fontSize: 13 }}>
+                  <thead><tr>
+                    <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Stand</th>
+                    <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Libellé</th>
+                    <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Conformité</th>
+                    <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Anomalie</th>
+                  </tr></thead>
+                  <tbody>
+                    {prestations.map(p => (
+                      <tr key={p.id} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)', ...conformiteBg(p.statut_conformite) }} onClick={() => setEditingPrestation(p)}>
+                        <td style={{ padding: '8px 8px 8px 0', fontWeight: 600 }}>{p.stands?.numero}{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td>
+                        <td style={{ padding: '8px 8px 8px 0' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <SyncDot pending={pendingSyncIds.has(p.id)} />
+                            {p.libelle}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 8px 8px 0' }}>
+                          {p.statut_conformite
+                            ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
+                            : <span className="text-muted">—</span>}
+                        </td>
+                        <td style={{ padding: '8px 0' }}>
+                          {p.anomalie
+                            ? <span style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12 }}>Oui</span>
+                            : <span className="text-muted" style={{ fontSize: 12 }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )
+          })()}
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
