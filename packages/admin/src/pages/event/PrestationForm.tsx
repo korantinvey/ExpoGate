@@ -187,7 +187,8 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           payload.date_controle = now
           Object.assign(payload, anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now))
         }
-        const { error } = await sb.from('prestations').update(payload).eq('id', prest.id)
+        // sbAdmin pour contourner le RLS qui bloque silencieusement l'update prestataire
+        const { error } = await sbAdmin.from('prestations').update(payload).eq('id', prest.id)
         if (error) { setError(error.message); return false }
         const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
         if (shouldNotify) {
