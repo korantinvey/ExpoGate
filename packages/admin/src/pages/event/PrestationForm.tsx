@@ -71,17 +71,20 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       }
       setStandsLoading(false)
 
-      // Network: prestataires — même pattern que TabPrestataires qui fonctionne
-      const { data: ep } = await sb.from('evenement_prestataires')
-        .select('prestataire_id, prestataires(*)')
+      // Network: prestataires — deux requêtes directes via sbAdmin (bypass RLS)
+      const { data: ep } = await sbAdmin.from('evenement_prestataires')
+        .select('prestataire_id')
         .eq('evenement_id', evenementId)
-      const list = (ep ?? [])
-        .map(r => r.prestataires as unknown as Prestataire)
-        .filter(Boolean)
-        .sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
-      if (list.length) {
-        setPrestataires(list)
-        db.prestataires.bulkPut(list.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+      const ids = (ep ?? []).map((r: { prestataire_id: string }) => r.prestataire_id).filter(Boolean)
+      if (ids.length) {
+        const { data: p } = await sbAdmin.from('prestataires')
+          .select('id, raison_sociale, email_contact, telephone')
+          .in('id', ids)
+          .order('raison_sociale')
+        if (p?.length) {
+          setPrestataires(p as unknown as Prestataire[])
+          db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }: { id: string; raison_sociale: string; email_contact: string | null; telephone: string | null }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
+        }
       }
     }
     loadForm()
