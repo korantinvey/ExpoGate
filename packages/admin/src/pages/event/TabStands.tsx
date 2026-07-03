@@ -25,7 +25,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
   const [bulkField, setBulkField] = useState<BulkStandField>('hall')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
-  const [controleurs, setControleurs] = useState<{ id: string; users: { nom: string; prenom: string } | null }[]>([])
+  const [controleurs, setControleurs] = useState<{ id: string; role_local: string; users: { nom: string; prenom: string } | null }[]>([])
   const { notify: bulkNotify } = useToast()
 
   async function load() {
@@ -88,10 +88,10 @@ export function TabStands({ ev }: { ev: Evenement }) {
 
   useEffect(() => {
     sb.from('user_evenements')
-      .select('id, users(nom, prenom)')
+      .select('id, role_local, users(nom, prenom)')
       .eq('evenement_id', ev.id)
-      .eq('role_local', 'controleur')
-      .then(({ data }) => setControleurs((data ?? []).map(c => ({ id: c.id as string, users: Array.isArray(c.users) ? (c.users[0] ?? null) : c.users }))))
+      .in('role_local', ['organisateur', 'controleur'])
+      .then(({ data }) => setControleurs((data ?? []).map(c => ({ id: c.id as string, role_local: c.role_local as string, users: Array.isArray(c.users) ? (c.users[0] ?? null) : (c.users as { nom: string; prenom: string } | null) }))))
   }, [ev.id])
 
   const standsFiltrés = sousOnglet === 'tous' ? stands
@@ -111,7 +111,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
       const { error } = await sbAdmin.from('controleur_stands').upsert(rows, { onConflict: 'user_evenement_id,stand_id' })
       setBulkApplying(false)
       if (error) { bulkNotify(error.message, 'error'); return }
-      bulkNotify(`${bulkStandIds.size} stand${bulkStandIds.size > 1 ? 's' : ''} affecté${bulkStandIds.size > 1 ? 's' : ''} au contrôleur`, 'success')
+      bulkNotify(`${bulkStandIds.size} stand${bulkStandIds.size > 1 ? 's' : ''} affecté${bulkStandIds.size > 1 ? 's' : ''} au responsable`, 'success')
       setSelectedStandIds(new Set())
       return
     }
@@ -192,13 +192,13 @@ export function TabStands({ ev }: { ev: Evenement }) {
                 <option value="nom_exposant">Exposant</option>
                 <option value="surface">Surface (m²)</option>
                 <option value="angles">Angles</option>
-                {controleurs.length > 0 && <option value="controleur">Affecter un contrôleur</option>}
+                {controleurs.length > 0 && <option value="controleur">Affecter un responsable</option>}
               </select>
               {bulkField === 'controleur' ? (
                 <select value={bulkValue} onChange={e => setBulkValue(e.target.value)}
                   style={{ fontSize: 13, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', minWidth: 160 }}>
                   <option value="">— Choisir un contrôleur —</option>
-                  {controleurs.map(c => <option key={c.id} value={c.id}>{c.users?.prenom} {c.users?.nom}</option>)}
+                  {controleurs.map(c => <option key={c.id} value={c.id}>{c.users?.prenom} {c.users?.nom}{c.role_local === 'controleur' ? ' (contrôleur)' : ' (organisateur)'}</option>)}
                 </select>
               ) : (bulkField === 'surface' || bulkField === 'angles') ? (
                 <input type="number" min={0} value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="Valeur…"
