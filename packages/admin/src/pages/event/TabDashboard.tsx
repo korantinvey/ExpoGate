@@ -128,9 +128,6 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
 
   if (!stats) return <div className="empty-state">Chargement…</div>
 
-  const controlled = stats.conforme + stats.non_conforme + stats.absent + stats.a_verifier
-  const pct = (n: number) => stats.total > 0 ? Math.round(n / stats.total * 100) : 0
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
@@ -169,48 +166,8 @@ export function TabDashboard({ ev }: { ev: Evenement }) {
         ))}
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">Avancement du contrôle</div>
-          <span className="text-muted" style={{ fontSize: 13 }}>{controlled} / {stats.total} contrôlées</span>
-        </div>
-        <div className="card-body" style={{ padding: 24 }}>
-          {stats.total === 0 ? (
-            <div className="empty-state" style={{ padding: '16px 0' }}>Aucune prestation sur cet événement.</div>
-          ) : (
-            <>
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Progression globale</span>
-                  <strong>{pct(controlled)}%</strong>
-                </div>
-                <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct(controlled)}%`, background: 'var(--accent)', borderRadius: 4, transition: 'width 0.3s' }} />
-                </div>
-              </div>
-              {([
-                { label: 'Conformes', count: stats.conforme, color: 'var(--success)' },
-                { label: 'Non conformes', count: stats.non_conforme, color: '#f97316' },
-                { label: 'Absentes', count: stats.absent, color: 'var(--danger)' },
-                { label: 'À vérifier', count: stats.a_verifier, color: 'var(--text-muted)' },
-                { label: 'Non contrôlées', count: stats.non_controlees, color: 'var(--text-muted)' },
-              ] as const).map(({ label, count, color }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-                  <span style={{ width: 130, fontSize: 13, color: 'var(--text)' }}>{label}</span>
-                  <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct(count)}%`, background: color, borderRadius: 3 }} />
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color, minWidth: 28, textAlign: 'right' }}>{count}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 38, textAlign: 'right' }}>{pct(count)}%</span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
 
-      {prestatairesStats.length > 0 && (
+{prestatairesStats.length > 0 && (
         <div className="card">
           <div className="card-header">
             <div className="card-title">Prestataires</div>
