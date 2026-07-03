@@ -31,8 +31,10 @@ export function TabStands({ ev }: { ev: Evenement }) {
 
   async function load() {
     const localStands = await db.stands.where('evenement_id').equals(ev.id).toArray()
+    const cachedIds = localStands.map(s => s.id)
+
     if (localStands.length) {
-      const localPrests = await db.prestations.where('stand_id').anyOf(localStands.map(s => s.id)).toArray()
+      const localPrests = await db.prestations.where('stand_id').anyOf(cachedIds).toArray()
       const localPrestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
       for (const p of localPrests) {
         if (!localPrestsByStand[p.stand_id]) localPrestsByStand[p.stand_id] = []
@@ -43,24 +45,42 @@ export function TabStands({ ev }: { ev: Evenement }) {
       setPendingStandIds(new Set([...pendingFromPrests, ...pendingFromStands]))
       setStands(localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map(s => categoriserStand(s as unknown as Stand, localPrestsByStand)))
     }
+
     try {
-      const { data: standsData, error } = await sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero')
+      const [standsResult, prestsResult, pendingIds] = await Promise.all([
+        sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero'),
+        cachedIds.length > 0
+          ? sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', cachedIds).eq('deleted', false)
+          : Promise.resolve({ data: [] as { stand_id: string; statut_conformite: string | null }[], error: null }),
+        cachedIds.length > 0
+          ? getPendingStandIds(cachedIds)
+          : Promise.resolve(new Set<string>()),
+      ])
+
+      const { data: standsData, error } = standsResult
       if (error || !standsData) return
-      const standIds = standsData.map(s => s.id)
-      const prestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
-      if (standIds.length) {
-        const [{ data: prestsData }, pendingIds] = await Promise.all([
-          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', standIds).eq('deleted', false),
-          getPendingStandIds(standIds),
+
+      let finalPrests = prestsResult.data ?? []
+      let finalPending = pendingIds
+
+      const networkIds = standsData.map(s => s.id)
+      const cacheSet = new Set(cachedIds)
+      const idsChanged = networkIds.length !== cachedIds.length || networkIds.some(id => !cacheSet.has(id))
+      if (idsChanged && networkIds.length > 0) {
+        const [{ data: p2 }, pending2] = await Promise.all([
+          sb.from('prestations').select('stand_id, statut_conformite').in('stand_id', networkIds).eq('deleted', false),
+          getPendingStandIds(networkIds),
         ])
-        for (const row of prestsData ?? []) {
-          if (!prestsByStand[row.stand_id]) prestsByStand[row.stand_id] = []
-          prestsByStand[row.stand_id].push(row)
-        }
-        setPendingStandIds(pendingIds)
-      } else {
-        setPendingStandIds(new Set())
+        finalPrests = p2 ?? []
+        finalPending = pending2
       }
+
+      const prestsByStand: Record<string, { statut_conformite: string | null }[]> = {}
+      for (const row of finalPrests) {
+        if (!prestsByStand[row.stand_id]) prestsByStand[row.stand_id] = []
+        prestsByStand[row.stand_id].push(row)
+      }
+      setPendingStandIds(finalPending)
       setStands(standsData.map(s => categoriserStand(s, prestsByStand)))
     } catch { /* données locales déjà affichées */ }
   }
