@@ -70,8 +70,11 @@ export function PrestationFormAdmin({ prest, evenementId, onSaved, onGoToStands,
       } catch { /* hors ligne */ }
       setStandsLoading(false)
       try {
-        const { data: p } = await sb.from('prestataires').select('*').order('raison_sociale')
-        if (p) {
+        const { data: epRows } = await sb.from('evenement_prestataires')
+          .select('prestataires(id, raison_sociale, email_contact, telephone, created_at)')
+          .eq('evenement_id', evenementId)
+        if (epRows) {
+          const p = epRows.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
         }

@@ -3,12 +3,19 @@ import { db } from './db'
 import { compressImage } from './compressImage'
 
 export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
-  const [{ data: ev, error: evErr }, { data: stands, error: standsErr }] = await Promise.all([
+  const [{ data: ev, error: evErr }, { data: stands, error: standsErr }, { data: epRows }] = await Promise.all([
     sb.from('evenements').select('id, nom, lieu, date_debut, date_fin, statut').eq('id', eventId).single(),
     sb.from('stands').select('id, evenement_id, nom_exposant, hall, numero, surface, angles').eq('evenement_id', eventId).eq('deleted', false).order('numero'),
+    sb.from('evenement_prestataires').select('prestataires(id, raison_sociale, email_contact, telephone)').eq('evenement_id', eventId),
   ])
   if (evErr || !ev) throw new Error(evErr?.message ?? 'Événement introuvable')
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
+
+  // Met en cache les prestataires de l'événement pour les formulaires hors ligne
+  const prestataires = (epRows ?? []).map(r => r.prestataires as unknown as { id: string; raison_sociale: string; email_contact: string | null; telephone: string | null }).filter(Boolean)
+  if (prestataires.length) {
+    db.prestataires.bulkPut(prestataires).catch(() => {})
+  }
 
   const standIds = stands.map(s => s.id)
   const { data: rawPrestations, error: prestsErr } = standIds.length
