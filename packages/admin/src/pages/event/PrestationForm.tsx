@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sb, sbAdmin } from '../../lib/supabase'
 import { db } from '../../lib/db'
 import { Modal } from '../../components/ui/Modal'
@@ -23,6 +23,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
   const [standsLoading, setStandsLoading] = useState(true)
+  const userEditedStand = useRef(false)
   const [standId, setStandId] = useState(prest?.stand_id ?? initialStand?.id ?? '')
   const [libelle, setLibelle] = useState(prest?.libelle ?? '')
   const [categorie, setCategorie] = useState(prest?.categorie ?? '')
@@ -49,6 +50,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
 
   useEffect(() => {
     async function loadForm() {
+      // Dexie fallback
       const [localStands, localPrestataires] = await Promise.all([
         db.stands.where('evenement_id').equals(evenementId).toArray(),
         db.prestataires.orderBy('raison_sociale').toArray(),
@@ -56,38 +58,30 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       if (localStands.length) {
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
-        if (!prest?.stand_id && !initialStand) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
-        if (prest?.stand_id) {
-          const found = s.find(st => st.id === prest.stand_id)
-          if (found) setStandSearch(standLabel(found))
-        }
+        if (!prest?.stand_id && !initialStand && !userEditedStand.current) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
         setStandsLoading(false)
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
 
-      const [standsRes, prestaRes] = await Promise.allSettled([
-        sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
-        sb.from('evenement_prestataires').select('prestataire_id, prestataires(id, raison_sociale, email_contact, telephone)').eq('evenement_id', evenementId),
-      ])
-      if (standsRes.status === 'fulfilled' && standsRes.value.data) {
-        const s = standsRes.value.data
-        setStands(s)
-        if (!prest?.stand_id && !initialStand && s.length) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
-        if (prest?.stand_id) {
-          const found = s.find(st => st.id === prest.stand_id)
-          if (found) setStandSearch(standLabel(found))
-        }
+      // Network: stands
+      const { data: standsData } = await sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero')
+      if (standsData) {
+        setStands(standsData)
+        if (!prest?.stand_id && !initialStand && !userEditedStand.current && standsData.length) { setStandId(standsData[0].id); setStandSearch(standLabel(standsData[0])) }
       }
       setStandsLoading(false)
-      if (prestaRes.status === 'fulfilled' && prestaRes.value.data) {
-        const p = prestaRes.value.data
-          .map(r => r.prestataires as unknown as Prestataire)
-          .filter(Boolean)
-          .sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
-        if (p.length) {
-          setPrestataires(p)
-          db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
-        }
+
+      // Network: prestataires — même pattern que TabPrestataires qui fonctionne
+      const { data: ep } = await sb.from('evenement_prestataires')
+        .select('prestataire_id, prestataires(*)')
+        .eq('evenement_id', evenementId)
+      const list = (ep ?? [])
+        .map(r => r.prestataires as unknown as Prestataire)
+        .filter(Boolean)
+        .sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+      if (list.length) {
+        setPrestataires(list)
+        db.prestataires.bulkPut(list.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
       }
     }
     loadForm()
@@ -264,7 +258,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         <label>Stand</label>
         <input
           value={standSearch}
-          onChange={e => { if (!readOnly) { setStandSearch(e.target.value); setStandId('') } }}
+          onChange={e => { if (!readOnly) { userEditedStand.current = true; setStandSearch(e.target.value); setStandId('') } }}
           placeholder="Rechercher par numéro ou nom d'exposant…"
           autoComplete="off"
           readOnly={readOnly}
