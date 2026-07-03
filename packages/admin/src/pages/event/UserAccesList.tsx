@@ -5,7 +5,7 @@ import { DataTable } from '../../components/ui/DataTable'
 import { ExportButton } from '../../components/ui/ExportButton'
 import { useToast } from '../../components/ui/Toast'
 import type { Evenement, UserEvenement, RoleLocal } from '../../types'
-import { AddUserToEventModal } from './AddUserToEventModalAdmin'
+import { AddUserToEventModal } from './AddUserToEventModal'
 import { EditAccesModal } from './EditAccesModal'
 
 type Notify = (msg: string, type?: 'success' | 'error') => void

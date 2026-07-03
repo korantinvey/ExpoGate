@@ -14,13 +14,13 @@ import { DateInput } from '../components/ui/DateInput'
 import { TabMainCourante } from './TabMainCourante'
 import type { Evenement, EvenementStatut, Stand, Prestation, RoleLocal } from '../types'
 import { STATUT_LABELS, STATUT_COLORS, conformiteBg } from './event/helpers'
-import { TabDashboard } from './event/TabDashboardOrg'
-import { TabStands } from './event/TabStandsOrg'
-import { TabPrestations } from './event/TabPrestationsOrg'
-import { TabPrestataires } from './event/TabPrestatairesOrg'
-import { TabUtilisateurs } from './event/UserAccesListOrg'
-import { StandPrestationsModal } from './event/StandPrestationsModalOrg'
-import { PrestationFormOrg } from './event/PrestationFormOrg'
+import { TabDashboard } from './event/TabDashboard'
+import { TabStands } from './event/TabStands'
+import { TabPrestations } from './event/TabPrestations'
+import { TabPrestataires } from './event/TabPrestataires'
+import { TabUtilisateurs } from './event/UserAccesList'
+import { StandPrestationsModal } from './event/StandPrestationsModal'
+import { PrestationForm } from './event/PrestationForm'
 
 function EvenementForm({ ev, onSaved }: { ev: Evenement; onSaved: () => void }) {
   const [nom, setNom] = useState(ev.nom)
@@ -277,7 +277,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
         />
       )}
       {editingPrestation && (
-        <PrestationFormOrg
+        <PrestationForm
           prest={editingPrestation}
           evenementId={ev.id}
           onSaved={async () => {

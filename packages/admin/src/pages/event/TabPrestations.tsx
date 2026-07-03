@@ -8,7 +8,7 @@ import { ExportButton } from '../../components/ui/ExportButton'
 import { useToast } from '../../components/ui/Toast'
 import type { Evenement, Prestation, Prestataire } from '../../types'
 import { STATUT_LABELS, STATUT_COLORS, conformiteBg, type BulkPrestaField } from './helpers'
-import { PrestationFormAdmin } from './PrestationFormAdmin'
+import { PrestationForm } from './PrestationForm'
 import { ImportPrestationsModal } from './ImportPrestationsModal'
 
 export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStands: () => void }) {
@@ -72,14 +72,14 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
   }, [])
 
   async function applyBulkPrestations() {
-    if (!selectedPrestaIds.size) return
     setBulkPrestaApplying(true)
+    const bulkIds = selectedPrestaIds.size > 0 ? selectedPrestaIds : new Set(filteredPrestations.map(p => p.id))
+    if (!bulkIds.size) { setBulkPrestaApplying(false); return }
     const patch: Record<string, unknown> = {}
     if (bulkPrestaField === 'prestataire_id') patch.prestataire_id = bulkPrestaValue || null
     else if (bulkPrestaField === 'categorie') patch.categorie = bulkPrestaValue || null
     else if (bulkPrestaField === 'emplacement_prevu') patch.emplacement_prevu = bulkPrestaValue || null
     else if (bulkPrestaField === 'ajout_sur_site') patch.ajout_sur_site = bulkPrestaValue === 'true'
-    const bulkIds = selectedPrestaIds.size > 0 ? selectedPrestaIds : new Set(filteredPrestations.map(p => p.id))
     const { error } = await sb.from('prestations').update(patch).in('id', [...bulkIds])
     setBulkPrestaApplying(false)
     if (error) { bulkNotify(error.message, 'error'); return }
@@ -182,11 +182,12 @@ export function TabPrestations({ ev, onGoToStands }: { ev: Evenement; onGoToStan
       </div>
 
       {modal !== null && (
-        <PrestationFormAdmin
+        <PrestationForm
           prest={modal === 'new' ? null : modal}
           evenementId={ev.id}
           onSaved={() => { setModal(null); load() }}
           onGoToStands={() => { setModal(null); onGoToStands() }}
+          canDelete
         />
       )}
       {importing && <ImportPrestationsModal evenementId={ev.id} onDone={() => { setImporting(false); load() }} />}

@@ -7,18 +7,23 @@ import { compressImage } from '../../lib/compressImage'
 import type { Prestation, Stand, Prestataire, ControleStatut } from '../../types'
 import { STATUT_LABELS } from './helpers'
 
-export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, readOnly = false, canDelete = false }: {
+function standLabel(s: { numero: string; nom_exposant?: string | null }) {
+  return `${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`
+}
+
+export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, initialStand, readOnly = false, canDelete = false }: {
   prest: Prestation | null
   evenementId: string
   onSaved: () => void
   onGoToStands: () => void
+  initialStand?: Stand
   readOnly?: boolean
   canDelete?: boolean
 }) {
   const [stands, setStands] = useState<Stand[]>([])
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
   const [standsLoading, setStandsLoading] = useState(true)
-  const [standId, setStandId] = useState(prest?.stand_id ?? '')
+  const [standId, setStandId] = useState(prest?.stand_id ?? initialStand?.id ?? '')
   const [libelle, setLibelle] = useState(prest?.libelle ?? '')
   const [categorie, setCategorie] = useState(prest?.categorie ?? '')
   const [qte, setQte] = useState(prest?.quantite_attendue ?? 1)
@@ -26,7 +31,12 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
   const [prestaId, setPrestaId] = useState(prest?.prestataire_id ?? '')
   const [ajoutSurSite, setAjoutSurSite] = useState(prest?.ajout_sur_site ?? false)
   const [error, setError] = useState('')
-  const [standSearch, setStandSearch] = useState(() => prest?.stands ? `${prest.stands.numero}${prest.stands.nom_exposant ? ` — ${prest.stands.nom_exposant}` : ''}` : '')
+  const [cError, setCError] = useState('')
+  const [standSearch, setStandSearch] = useState(() => {
+    if (initialStand) return standLabel(initialStand)
+    if (prest?.stands) return standLabel(prest.stands)
+    return ''
+  })
   const [cStatut, setCStatut] = useState<ControleStatut | ''>(prest?.statut_conformite ?? '')
   const [cQte, setCQte] = useState<string>(prest?.quantite_constatee != null ? String(prest.quantite_constatee) : '')
   const [cComment, setCComment] = useState(prest?.commentaire ?? '')
@@ -46,16 +56,15 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
       if (localStands.length) {
         const s = localStands.sort((a, b) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })) as unknown as Stand[]
         setStands(s)
-        if (!prest?.stand_id) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
+        if (!prest?.stand_id && !initialStand) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
         if (prest?.stand_id) {
           const found = s.find(st => st.id === prest.stand_id)
-          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+          if (found) setStandSearch(standLabel(found))
         }
         setStandsLoading(false)
       }
       if (localPrestataires.length) setPrestataires(localPrestataires as unknown as Prestataire[])
 
-      // Stands et prestataires en parallèle
       const [standsRes, epRes] = await Promise.allSettled([
         sb.from('stands').select('*').eq('evenement_id', evenementId).eq('deleted', false).order('numero'),
         sb.from('evenement_prestataires')
@@ -65,16 +74,15 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
       if (standsRes.status === 'fulfilled' && standsRes.value.data) {
         const s = standsRes.value.data
         setStands(s)
-        if (!prest?.stand_id && s.length) { setStandId(s[0].id); setStandSearch(`${s[0].numero}${s[0].nom_exposant ? ` — ${s[0].nom_exposant}` : ''}`) }
+        if (!prest?.stand_id && !initialStand && s.length) { setStandId(s[0].id); setStandSearch(standLabel(s[0])) }
         if (prest?.stand_id) {
           const found = s.find(st => st.id === prest.stand_id)
-          if (found) setStandSearch(`${found.numero}${found.nom_exposant ? ` — ${found.nom_exposant}` : ''}`)
+          if (found) setStandSearch(standLabel(found))
         }
       }
       setStandsLoading(false)
       if (epRes.status === 'fulfilled' && epRes.value.data) {
-        const epRows = epRes.value.data
-        const p = epRows.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
+        const p = epRes.value.data.map(r => r.prestataires as unknown as Prestataire).filter(Boolean).sort((a, b) => a.raison_sociale.localeCompare(b.raison_sociale, 'fr'))
         if (p.length) {
           setPrestataires(p)
           db.prestataires.bulkPut(p.map(({ id, raison_sociale, email_contact, telephone }) => ({ id, raison_sociale, email_contact, telephone }))).catch(() => {})
@@ -84,7 +92,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
     loadForm()
     if (prest?.id) {
       sbAdmin.from('photos').select('url').eq('prestation_id', prest.id).not('url', 'is', null)
-        .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url)))
+        .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url!)))
     }
   }, [])
 
@@ -114,10 +122,10 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
         headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
         body: compressed,
       })
-      if (!uploadRes.ok) { setError(`Upload échoué : ${uploadRes.status} — ${await uploadRes.text()}`); return }
+      if (!uploadRes.ok) { const errTxt = await uploadRes.text(); setCError(`Upload échoué : ${uploadRes.status} — ${errTxt}`); return }
       const { data: { publicUrl } } = sbAdmin.storage.from('Photos').getPublicUrl(path)
       const { error: insErr } = await sbAdmin.from('photos').insert({ prestation_id: prestationId, url: publicUrl, synced: true })
-      if (insErr) { setError(`Enregistrement photo échoué : ${insErr.message}`); continue }
+      if (insErr) { setCError(`Enregistrement photo échoué : ${insErr.message}`); continue }
     }
   }
 
@@ -171,13 +179,9 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
         const now = new Date().toISOString()
         if (prest?.id) {
           await db.prestations.update(prest.id, {
-            stand_id: standId,
-            libelle,
-            categorie: categorie || null,
-            quantite_attendue: qte,
-            emplacement_prevu: emplacement || null,
-            prestataire_id: prestaId || null,
-            ajout_sur_site: ajoutSurSite,
+            stand_id: standId, libelle, categorie: categorie || null,
+            quantite_attendue: qte, emplacement_prevu: emplacement || null,
+            prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
             pending_sync: 1,
@@ -191,21 +195,14 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
         } else {
           const newId = crypto.randomUUID()
           await db.prestations.add({
-            id: newId,
-            stand_id: standId,
-            prestataire_id: prestaId || null,
-            libelle,
-            categorie: categorie || null,
-            quantite_attendue: qte,
-            emplacement_prevu: emplacement || null,
-            ajout_sur_site: ajoutSurSite,
+            id: newId, stand_id: standId, prestataire_id: prestaId || null,
+            libelle, categorie: categorie || null, quantite_attendue: qte,
+            emplacement_prevu: emplacement || null, ajout_sur_site: ajoutSurSite,
             commentaire_prestataire: commentairePrestataire || null,
             statut_conformite: cStatut ? cStatut as ControleStatut : null,
             quantite_constatee: cQte !== '' ? parseInt(cQte) : null,
-            commentaire: cComment || null,
-            controleur_id: null,
-            date_controle: cStatut ? now : null,
-            pending_sync: 1,
+            commentaire: cComment || null, controleur_id: null,
+            date_controle: cStatut ? now : null, pending_sync: 1,
           })
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: newId, blob: file, created_at: now, synced: 0, remote_url: null })
@@ -272,7 +269,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
           readOnly={readOnly}
           style={readOnly ? roStyle : undefined}
         />
-        {standSearch && !standId && (() => {
+        {standSearch && !standId && !readOnly && (() => {
           const q = standSearch.toLowerCase()
           const filtered = stands.filter(s => s.numero.toLowerCase().includes(q) || (s.nom_exposant ?? '').toLowerCase().includes(q))
           return filtered.length > 0 ? (
@@ -280,7 +277,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
               {filtered.map(s => (
                 <div key={s.id}
                   style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-                  onMouseDown={() => { setStandId(s.id); setStandSearch(`${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`) }}
+                  onMouseDown={() => { setStandId(s.id); setStandSearch(standLabel(s)) }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
                   onMouseLeave={e => (e.currentTarget.style.background = '')}
                 >
@@ -321,6 +318,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
 
       <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Conformité</div>
+        <Alert message={cError} />
         <div className="grid-2">
           <div className="form-group">
             <label>Statut</label>
@@ -394,7 +392,7 @@ export function PrestationFormOrg({ prest, evenementId, onSaved, onGoToStands, r
 
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
-          <img src={lightbox} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8 }} onClick={e => e.stopPropagation()} />
+          <img src={lightbox} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
         </div>
       )}
     </Modal>

@@ -5,9 +5,10 @@ import { Alert } from '../../components/ui/Alert'
 import { DataTable } from '../../components/ui/DataTable'
 import { ExportButton } from '../../components/ui/ExportButton'
 import { useToast } from '../../components/ui/Toast'
-import { isValidEmail, normalizeEmail } from '../../lib/normalize'
+import { isValidEmail } from '../../lib/normalize'
+import { normalizeEmail } from '../../lib/normalize'
 import type { Evenement, Prestataire } from '../../types'
-import { PrestataireDetailModal } from './PrestataireDetailModalOrg'
+import { PrestataireDetailModal } from './PrestataireDetailModal'
 
 export function TabPrestataires({ ev }: { ev: Evenement }) {
   const [prestataires, setPrestataires] = useState<Prestataire[]>([])
@@ -109,7 +110,14 @@ export function TabPrestataires({ ev }: { ev: Evenement }) {
           />
         </div>
       </div>
-      {selected && <PrestataireDetailModal prestataire={selected} evenementId={ev.id} onClose={() => { setSelected(null); load() }} />}
+
+      {selected && (
+        <PrestataireDetailModal
+          prestataire={selected}
+          evenementId={ev.id}
+          onClose={() => { setSelected(null); load() }}
+        />
+      )}
       {showNew && (
         <Modal title="Nouveau prestataire" confirmLabel="Créer" onClose={() => setShowNew(false)} onConfirm={create}>
           <Alert message={newError} />

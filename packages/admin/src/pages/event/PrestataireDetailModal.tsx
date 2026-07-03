@@ -3,10 +3,14 @@ import { sb, sbAdmin } from '../../lib/supabase'
 import { Modal } from '../../components/ui/Modal'
 import { Alert } from '../../components/ui/Alert'
 import { InvitationModal } from '../../components/ui/InvitationModal'
+import { SyncDot } from '../../components/ui/SyncDot'
 import { useToast } from '../../components/ui/Toast'
-import type { Prestataire, UserEvenement } from '../../types'
-import { AddUserToEventModal } from './AddUserToEventModalAdmin'
+import { getPendingPrestaIds } from '../../lib/db'
+import type { Prestataire, UserEvenement, Prestation } from '../../types'
+import { STATUT_LABELS, STATUT_COLORS, conformiteBg } from './helpers'
+import { AddUserToEventModal } from './AddUserToEventModal'
 import { EditMembreModal } from './EditMembreModal'
+import { PrestationForm } from './PrestationForm'
 
 type Notify = (msg: string, type?: 'success' | 'error') => void
 
@@ -30,8 +34,11 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
   const [email, setEmail] = useState(prestataire.email_contact ?? '')
   const [tel, setTel] = useState(prestataire.telephone ?? '')
   const [membres, setMembres] = useState<UserEvenement[]>([])
+  const [prestations, setPrestations] = useState<Prestation[]>([])
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set())
   const [addModal, setAddModal] = useState(false)
   const [editingMembre, setEditingMembre] = useState<UserEvenement | null>(null)
+  const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
   const [inviting, setInviting] = useState<{ email: string; userId: string } | null>(null)
   const [infoError, setInfoError] = useState('')
   const { notify, toastEl } = useToast()
@@ -44,13 +51,27 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
     setMembres(data ?? [])
   }
 
-  useEffect(() => { loadMembres() }, [])
+  async function loadPrestations() {
+    const { data: stands } = await sb.from('stands').select('id').eq('evenement_id', evenementId).eq('deleted', false)
+    const standIds = (stands ?? []).map(s => s.id)
+    if (!standIds.length) { setPrestations([]); setPendingSyncIds(new Set()); return }
+    const { data } = await sb.from('prestations')
+      .select('*, stands(numero, nom_exposant), users(nom, prenom)')
+      .in('stand_id', standIds)
+      .eq('deleted', false)
+      .eq('prestataire_id', prestataire.id)
+      .order('libelle')
+    if (data) {
+      setPrestations(data)
+      setPendingSyncIds(await getPendingPrestaIds(data.map(p => p.id)))
+    }
+  }
+
+  useEffect(() => { loadMembres(); loadPrestations() }, [])
 
   async function saveInfo(): Promise<boolean> {
     if (!nom) { setInfoError('La raison sociale est obligatoire.'); return false }
-    const { error } = await sb.from('prestataires')
-      .update({ raison_sociale: nom, email_contact: email || null, telephone: tel || null })
-      .eq('id', prestataire.id)
+    const { error } = await sb.from('prestataires').update({ raison_sociale: nom, email_contact: email || null, telephone: tel || null }).eq('id', prestataire.id)
     if (error) { setInfoError(error.message); return false }
     onClose(); return true
   }
@@ -59,7 +80,7 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
     if (!confirm('Retirer ce membre ?')) return
     const { error } = await sb.from('user_evenements').delete().eq('id', id)
     if (error) { notify(error.message, 'error'); return }
-    await loadMembres()
+    loadMembres()
   }
 
   async function retirerDeLEvenement() {
@@ -75,17 +96,46 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
   return (
     <>
       <Modal title={prestataire.raison_sociale} confirmLabel="Enregistrer" onClose={onClose} onConfirm={saveInfo}
-        footer={
-          <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={retirerDeLEvenement}>
-            Retirer de l'événement
-          </button>
-        }
+        footer={<button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} onClick={retirerDeLEvenement}>Retirer de l'événement</button>}
       >
         <Alert message={infoError} />
         <div className="form-group"><label>Raison sociale</label><input value={nom} onChange={e => setNom(e.target.value)} /></div>
         <div className="grid-2">
           <div className="form-group"><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
           <div className="form-group"><label>Téléphone</label><input value={tel} onChange={e => setTel(e.target.value)} /></div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Prestations sur cet événement</div>
+          {prestations.length === 0 ? (
+            <div className="text-muted" style={{ fontSize: 13 }}>Aucune prestation assignée.</div>
+          ) : (
+            <table style={{ width: '100%', fontSize: 13 }}>
+              <thead><tr>
+                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Stand</th>
+                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Libellé</th>
+                <th style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', paddingBottom: 6 }}>Conformité</th>
+              </tr></thead>
+              <tbody>
+                {prestations.map(p => (
+                  <tr key={p.id} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)', ...conformiteBg(p.statut_conformite) }} onClick={() => setEditingPrestation(p)}>
+                    <td style={{ padding: '8px 8px 8px 0', fontWeight: 600 }}>{p.stands?.numero}{p.stands?.nom_exposant ? ` — ${p.stands.nom_exposant}` : ''}</td>
+                    <td style={{ padding: '8px 8px 8px 0' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <SyncDot pending={pendingSyncIds.has(p.id)} />
+                        {p.libelle}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 0' }}>
+                      {p.statut_conformite
+                        ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
+                        : <span className="text-muted">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
@@ -117,24 +167,10 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
           )}
         </div>
       </Modal>
-
-      {addModal && (
-        <AddUserToEventModal
-          evenementId={evenementId}
-          forcedRole="prestataire"
-          forcedPrestaId={prestataire.id}
-          onClose={() => { setAddModal(false); loadMembres() }}
-        />
-      )}
-      {editingMembre && (
-        <EditMembreModal
-          membre={editingMembre}
-          onClose={() => { setEditingMembre(null); loadMembres() }}
-        />
-      )}
-      {inviting && (
-        <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />
-      )}
+      {addModal && <AddUserToEventModal evenementId={evenementId} forcedRole="prestataire" forcedPrestaId={prestataire.id} onClose={() => { setAddModal(false); loadMembres() }} />}
+      {editingMembre && <EditMembreModal membre={editingMembre} onClose={() => { setEditingMembre(null); loadMembres() }} />}
+      {editingPrestation && <PrestationForm readOnly canDelete prest={editingPrestation} evenementId={evenementId} onSaved={() => { setEditingPrestation(null); loadPrestations() }} onGoToStands={() => setEditingPrestation(null)} />}
+      {inviting && <InvitationModal email={inviting.email} userId={inviting.userId} notify={notify} onClose={() => setInviting(null)} />}
       {toastEl}
     </>
   )

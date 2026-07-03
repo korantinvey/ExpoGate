@@ -10,7 +10,7 @@ import type { Evenement, Stand } from '../../types'
 import { categoriserStand, type StandAvecStatut, type BulkStandField } from './helpers'
 import { StandForm } from './StandForm'
 import { ImportStandsModal } from './ImportStandsModal'
-import { StandPrestationsModal } from './StandPrestationsModalAdmin'
+import { StandPrestationsModal } from './StandPrestationsModal'
 
 export function TabStands({ ev }: { ev: Evenement }) {
   const [stands, setStands] = useState<StandAvecStatut[]>([])
@@ -45,8 +45,6 @@ export function TabStands({ ev }: { ev: Evenement }) {
     }
 
     try {
-      // Requêtes parallèles : si les IDs Dexie sont disponibles, on lance prestations
-      // en même temps que stands sans attendre la réponse réseau des stands
       const [standsResult, prestsResult, pendingIds] = await Promise.all([
         sb.from('stands').select('*').eq('evenement_id', ev.id).eq('deleted', false).order('numero'),
         cachedIds.length > 0
@@ -63,7 +61,6 @@ export function TabStands({ ev }: { ev: Evenement }) {
       let finalPrests = prestsResult.data ?? []
       let finalPending = pendingIds
 
-      // Si les stands ont changé depuis le cache, on re-fetche les prestations avec les bons IDs
       const networkIds = standsData.map(s => s.id)
       const cacheSet = new Set(cachedIds)
       const idsChanged = networkIds.length !== cachedIds.length || networkIds.some(id => !cacheSet.has(id))
@@ -90,7 +87,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
 
   const standsFiltrés = sousOnglet === 'tous' ? stands
     : sousOnglet === 'valide' ? stands.filter(s => s._statut === 'valide')
-    : stands.filter(s => s._statut === 'a_valider' || s._statut === 'sans_prestation')
+    : stands.filter(s => s._statut !== 'valide')
 
   const bulkStandIds = selectedStandIds.size > 0 ? selectedStandIds : new Set(filteredStands.map(s => s.id))
   const showBulkStands = selectedStandIds.size > 0 || filteredStands.length < standsFiltrés.length
@@ -111,7 +108,7 @@ export function TabStands({ ev }: { ev: Evenement }) {
     load()
   }
 
-  const nbAValider = stands.filter(s => s._statut === 'a_valider' || s._statut === 'sans_prestation').length
+  const nbAValider = stands.filter(s => s._statut !== 'valide').length
   const nbValides = stands.filter(s => s._statut === 'valide').length
 
   const columns = [
@@ -217,13 +214,13 @@ export function TabStands({ ev }: { ev: Evenement }) {
       </div>
 
       {modal !== null && (
-        <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} />
+        <StandForm stand={modal === 'new' ? null : modal} evenementId={ev.id} onSaved={() => { setModal(null); load() }} canDelete />
       )}
       {importing && (
         <ImportStandsModal evenementId={ev.id} nomEvenement={ev.nom} onDone={() => { setImporting(false); load() }} />
       )}
       {viewingPrestations && (
-        <StandPrestationsModal stand={viewingPrestations} evenementId={ev.id} onClose={() => setViewingPrestations(null)} />
+        <StandPrestationsModal stand={viewingPrestations} evenementId={ev.id} onClose={() => { setViewingPrestations(null); load() }} />
       )}
     </>
   )
