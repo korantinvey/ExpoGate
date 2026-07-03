@@ -64,11 +64,11 @@ export function PrestataireDetailModal({ prestataire, evenementId, onClose }: { 
 
   async function retirerDeLEvenement() {
     if (!confirm(`Retirer "${prestataire.raison_sociale}" de cet événement ?\n\nTous ses membres seront révoqués. Les prestations associées resteront mais sans accès utilisateur.`)) return
-    const { error } = await sb.from('user_evenements')
-      .delete()
-      .eq('evenement_id', evenementId)
-      .eq('prestataire_id', prestataire.id)
-    if (error) { notify(error.message, 'error'); return }
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      sb.from('user_evenements').delete().eq('evenement_id', evenementId).eq('prestataire_id', prestataire.id),
+      sb.from('evenement_prestataires').delete().eq('evenement_id', evenementId).eq('prestataire_id', prestataire.id),
+    ])
+    if (e1 || e2) { notify((e1 ?? e2)!.message, 'error'); return }
     onClose()
   }
 
