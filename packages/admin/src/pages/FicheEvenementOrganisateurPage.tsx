@@ -4,15 +4,14 @@ import { sb } from '../lib/supabase'
 import { db, getPendingPrestaIds } from '../lib/db'
 import { useAuth } from '../hooks/useAuth'
 import { fmtDate } from '../lib/format'
-import { Modal } from '../components/ui/Modal'
-import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { SyncDot } from '../components/ui/SyncDot'
 import { DataTable } from '../components/ui/DataTable'
 import { ExportButton } from '../components/ui/ExportButton'
-import { DateInput } from '../components/ui/DateInput'
-import { TabMainCourante } from './TabMainCourante'
-import type { Evenement, EvenementStatut, Stand, Prestation, RoleLocal } from '../types'
+import { ConformiteStats } from '../components/ui/ConformiteStats'
+import { EvenementForm } from '../components/EvenementForm'
+import { TabMainCourante } from './event/TabMainCourante'
+import type { Evenement, EvenementAvecRole, Stand, Prestation, RoleLocal } from '../types'
 import { STATUT_LABELS, STATUT_COLORS, conformiteBg } from './event/helpers'
 import { TabDashboard } from './event/TabDashboard'
 import { TabStands } from './event/TabStands'
@@ -21,41 +20,6 @@ import { TabPrestataires } from './event/TabPrestataires'
 import { TabUtilisateurs } from './event/UserAccesList'
 import { StandPrestationsModal } from './event/StandPrestationsModal'
 import { PrestationForm } from './event/PrestationForm'
-
-function EvenementForm({ ev, onSaved }: { ev: Evenement; onSaved: () => void }) {
-  const [nom, setNom] = useState(ev.nom)
-  const [lieu, setLieu] = useState(ev.lieu ?? '')
-  const [debut, setDebut] = useState(ev.date_debut)
-  const [fin, setFin] = useState(ev.date_fin)
-  const [statut, setStatut] = useState<EvenementStatut>(ev.statut)
-  const [error, setError] = useState('')
-
-  async function save(): Promise<boolean> {
-    if (!nom || !debut || !fin) { setError('Nom et dates sont obligatoires.'); return false }
-    const { error } = await sb.from('evenements').update({ nom, lieu: lieu || null, date_debut: debut, date_fin: fin, statut }).eq('id', ev.id)
-    if (error) { setError(error.message); return false }
-    onSaved(); return true
-  }
-
-  return (
-    <Modal title="Modifier l'événement" confirmLabel="Enregistrer" onClose={onSaved} onConfirm={save}>
-      <Alert message={error} />
-      <div className="grid-2">
-        <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Nom</label><input value={nom} onChange={e => setNom(e.target.value)} /></div>
-        <div className="form-group"><label>Date de début</label><DateInput value={debut} onChange={setDebut} /></div>
-        <div className="form-group"><label>Date de fin</label><DateInput value={fin} onChange={setFin} defaultMonth={debut} /></div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Lieu</label><input value={lieu} onChange={e => setLieu(e.target.value)} /></div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-          <label>Statut</label>
-          <select value={statut} onChange={e => setStatut(e.target.value as EvenementStatut)}>
-            <option value="actif">Actif</option>
-            <option value="termine">Terminé</option>
-          </select>
-        </div>
-      </div>
-    </Modal>
-  )
-}
 
 function TabDetails({ ev, onEdit }: { ev: Evenement; onEdit: () => void }) {
   return (
@@ -76,26 +40,22 @@ function TabDetails({ ev, onEdit }: { ev: Evenement; onEdit: () => void }) {
   )
 }
 
-type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
+type OrgTab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
 
-export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () => void }) {
-  const [tab, setTab] = useState<Tab>('dashboard')
+function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () => void }) {
+  const [tab, setTab] = useState<OrgTab>('dashboard')
   const [editing, setEditing] = useState(false)
 
-  const TAB_LABELS: Record<Tab, string> = {
-    dashboard: 'Tableau de bord',
-    details: 'Détails',
-    stands: 'Stands',
-    prestations: 'Prestations',
-    prestataires: 'Prestataires',
-    utilisateurs: 'Utilisateurs',
-    main_courante: 'Main courante',
+  const TAB_LABELS: Record<OrgTab, string> = {
+    dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands',
+    prestations: 'Prestations', prestataires: 'Prestataires',
+    utilisateurs: 'Utilisateurs', main_courante: 'Main courante',
   }
 
   return (
     <>
       <div className="tabs" style={{ marginBottom: 20 }}>
-        {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
+        {(Object.keys(TAB_LABELS) as OrgTab[]).map(t => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {TAB_LABELS[t]}
           </button>
@@ -110,14 +70,14 @@ export function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () 
       <div style={{ display: tab === 'utilisateurs' ? undefined : 'none' }}><TabUtilisateurs ev={ev} /></div>
       <div style={{ display: tab === 'main_courante' ? undefined : 'none' }}><TabMainCourante ev={ev} canDelete /></div>
 
-      {editing && <EvenementForm ev={ev} onSaved={() => { setEditing(false); onReload() }} />}
+      {editing && <EvenementForm ev={ev} showParametrage={false} onSaved={() => { setEditing(false); onReload() }} />}
     </>
   )
 }
 
 type PrestaTab = 'dashboard' | 'stands' | 'prestations'
 
-export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
+function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
   const [stands, setStands] = useState<(Stand & { prestations: Prestation[] })[]>([])
   const [viewingPrestations, setViewingPrestations] = useState<(Stand & { prestations: Prestation[] }) | null>(null)
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
@@ -129,15 +89,10 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
   useEffect(() => {
     async function load() {
       const { data: acces } = await sb.from('user_evenements')
-        .select('prestataire_id')
-        .eq('evenement_id', ev.id)
-        .eq('user_id', userId)
-        .single()
+        .select('prestataire_id').eq('evenement_id', ev.id).eq('user_id', userId).single()
       if (!acces?.prestataire_id) return
       const { data: prests } = await sb.from('prestations')
-        .select('*, stands(*)')
-        .eq('prestataire_id', acces.prestataire_id)
-        .eq('deleted', false)
+        .select('*, stands(*)').eq('prestataire_id', acces.prestataire_id).eq('deleted', false)
       if (!prests) return
       const byStand = new Map<string, Stand & { prestations: Prestation[] }>()
       for (const p of prests) {
@@ -178,32 +133,11 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
       </div>
 
       {tab === 'dashboard' && (
-        stands.length === 0 ? (
-          <div className="empty-state">Aucune prestation affectée à votre société sur cet événement.</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 160, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--text)' }}>{nbStands}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stand{nbStands > 1 ? 's' : ''}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 160, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--text-muted)' }}>{nbNonVerif}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Non vérifiée{nbNonVerif > 1 ? 's' : ''}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 160, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--success)' }}>{nbConforme}</div>
-              <div style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.8 }}>Conforme{nbConforme > 1 ? 's' : ''}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 160, background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: '#f97316' }}>{nbNonConforme}</div>
-              <div style={{ fontSize: 12, color: '#f97316', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.8 }}>Non conforme{nbNonConforme > 1 ? 's' : ''}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 160, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--danger)' }}>{nbAbsent}</div>
-              <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.8 }}>Absent{nbAbsent > 1 ? 's' : ''}</div>
-            </div>
-          </div>
-        )
+        <ConformiteStats
+          nbStands={nbStands} nbNonVerif={nbNonVerif} nbConforme={nbConforme}
+          nbNonConforme={nbNonConforme} nbAbsent={nbAbsent}
+          emptyMessage="Aucune prestation affectée à votre société sur cet événement."
+        />
       )}
 
       {tab === 'stands' && (
@@ -258,10 +192,8 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
                 { key: 'emplacement_prevu', label: 'Emplacement', filterable: true },
                 { key: 'statut_conformite', label: 'Conformité', sortable: true, filterable: true,
                   options: [
-                    { value: 'conforme', label: 'Conforme' },
-                    { value: 'non_conforme', label: 'Non conforme' },
-                    { value: 'absent', label: 'Absent' },
-                    { value: 'a_verifier', label: 'À vérifier' },
+                    { value: 'conforme', label: 'Conforme' }, { value: 'non_conforme', label: 'Non conforme' },
+                    { value: 'absent', label: 'Absent' }, { value: 'a_verifier', label: 'À vérifier' },
                   ],
                   render: p => p.statut_conformite
                     ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
@@ -275,16 +207,13 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
 
       {viewingPrestations && !editingPrestation && (
         <StandPrestationsModal
-          stand={viewingPrestations}
-          onClose={() => setViewingPrestations(null)}
-          onEditPrestation={p => setEditingPrestation(p)}
-          showStandTab={false}
+          stand={viewingPrestations} onClose={() => setViewingPrestations(null)}
+          onEditPrestation={p => setEditingPrestation(p)} showStandTab={false}
         />
       )}
       {editingPrestation && (
         <PrestationForm
-          prest={editingPrestation}
-          evenementId={ev.id}
+          prest={editingPrestation} evenementId={ev.id}
           onSaved={async () => {
             const { data } = await sb.from('prestations').select('*, stands(*), users(nom, prenom)').eq('id', editingPrestation.id).single()
             if (data) onPrestationSaved(data)
@@ -300,7 +229,7 @@ export function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }
 
 type ControleurTab = 'dashboard' | 'stands' | 'prestations' | 'main_courante'
 
-export function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
+function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
   const [tab, setTab] = useState<ControleurTab>('dashboard')
   const [stands, setStands] = useState<(Stand & { prestations: Prestation[] })[]>([])
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
@@ -310,21 +239,15 @@ export function VueControleur({ ev, userId }: { ev: Evenement; userId: string })
   useEffect(() => {
     async function load() {
       const { data: acces } = await sb.from('user_evenements')
-        .select('id')
-        .eq('evenement_id', ev.id)
-        .eq('user_id', userId)
-        .single()
+        .select('id').eq('evenement_id', ev.id).eq('user_id', userId).single()
       if (!acces) return
-      const { data: cs } = await sb.from('controleur_stands')
-        .select('stand_id')
-        .eq('user_evenement_id', acces.id)
+      const { data: cs } = await sb.from('controleur_stands').select('stand_id').eq('user_evenement_id', acces.id)
       const standIds = (cs ?? []).map((r: { stand_id: string }) => r.stand_id)
       if (!standIds.length) { setStands([]); return }
       const { data: standsData } = await sb.from('stands').select('*').in('id', standIds).order('numero')
       const { data: prests } = await sb.from('prestations')
         .select('*, stands(numero, nom_exposant), users(nom, prenom)')
-        .in('stand_id', standIds)
-        .eq('deleted', false)
+        .in('stand_id', standIds).eq('deleted', false)
       const byStand = new Map<string, Stand & { prestations: Prestation[] }>()
       for (const s of standsData ?? []) byStand.set(s.id, { ...s, prestations: [] })
       for (const p of prests ?? []) {
@@ -347,10 +270,8 @@ export function VueControleur({ ev, userId }: { ev: Evenement; userId: string })
   }
 
   const TAB_LABELS: Record<ControleurTab, string> = {
-    dashboard: 'Tableau de bord',
-    stands: 'Mes stands',
-    prestations: 'Mes prestations',
-    main_courante: 'Main courante',
+    dashboard: 'Tableau de bord', stands: 'Mes stands',
+    prestations: 'Mes prestations', main_courante: 'Main courante',
   }
 
   return (
@@ -362,24 +283,12 @@ export function VueControleur({ ev, userId }: { ev: Evenement; userId: string })
       </div>
 
       {tab === 'dashboard' && (
-        stands.length === 0 ? (
-          <div className="empty-state">Aucun stand ne vous est affecté sur cet événement.</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
-            {[
-              { val: nbStands, label: `Stand${nbStands > 1 ? 's' : ''} affecté${nbStands > 1 ? 's' : ''}`, bg: 'var(--surface)', border: 'var(--border)', color: 'var(--text)', muted: 'var(--text-muted)' },
-              { val: nbNonVerif, label: `Non vérifiée${nbNonVerif > 1 ? 's' : ''}`, bg: 'var(--surface)', border: 'var(--border)', color: 'var(--text-muted)', muted: 'var(--text-muted)' },
-              { val: nbConforme, label: `Conforme${nbConforme > 1 ? 's' : ''}`, bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)', color: 'var(--success)', muted: 'var(--success)' },
-              { val: nbNonConforme, label: `Non conforme${nbNonConforme > 1 ? 's' : ''}`, bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.25)', color: '#f97316', muted: '#f97316' },
-              { val: nbAbsent, label: `Absent${nbAbsent > 1 ? 's' : ''}`, bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)', color: 'var(--danger)', muted: 'var(--danger)' },
-            ].map(({ val, label, bg, border, color, muted }) => (
-              <div key={label} style={{ flex: 1, minWidth: 140, background: bg, border: `1px solid ${border}`, borderRadius: 'var(--radius)', padding: '20px 24px' }}>
-                <div style={{ fontSize: 36, fontWeight: 700, color }}>{val}</div>
-                <div style={{ fontSize: 12, color: muted, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.8 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        )
+        <ConformiteStats
+          nbStands={nbStands} nbNonVerif={nbNonVerif} nbConforme={nbConforme}
+          nbNonConforme={nbNonConforme} nbAbsent={nbAbsent}
+          emptyMessage="Aucun stand ne vous est affecté sur cet événement."
+          marginTop={4}
+        />
       )}
 
       {tab === 'stands' && (
@@ -428,10 +337,8 @@ export function VueControleur({ ev, userId }: { ev: Evenement; userId: string })
                 { key: 'quantite_attendue', label: 'Qté', sortable: true },
                 { key: 'statut_conformite', label: 'Conformité', sortable: true, filterable: true,
                   options: [
-                    { value: 'conforme', label: 'Conforme' },
-                    { value: 'non_conforme', label: 'Non conforme' },
-                    { value: 'absent', label: 'Absent' },
-                    { value: 'a_verifier', label: 'À vérifier' },
+                    { value: 'conforme', label: 'Conforme' }, { value: 'non_conforme', label: 'Non conforme' },
+                    { value: 'absent', label: 'Absent' }, { value: 'a_verifier', label: 'À vérifier' },
                   ],
                   render: p => p.statut_conformite
                     ? <span style={{ color: STATUT_COLORS[p.statut_conformite], fontWeight: 600 }}>{STATUT_LABELS[p.statut_conformite]}</span>
@@ -447,8 +354,7 @@ export function VueControleur({ ev, userId }: { ev: Evenement; userId: string })
 
       {editingPrestation && (
         <PrestationForm
-          prest={editingPrestation}
-          evenementId={ev.id}
+          prest={editingPrestation} evenementId={ev.id}
           onSaved={async () => {
             const { data } = await sb.from('prestations').select('*, stands(numero, nom_exposant), users(nom, prenom)').eq('id', editingPrestation.id).single()
             if (data) onPrestationSaved(data)

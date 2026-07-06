@@ -2,74 +2,10 @@ import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
 import { db } from '../lib/db'
-import { Modal } from '../components/ui/Modal'
-import { Alert } from '../components/ui/Alert'
-import { DateInput } from '../components/ui/DateInput'
 import { fmtDate } from '../lib/format'
-import type { Evenement, EvenementStatut } from '../types'
-
-const STATUT_LABEL: Record<string, string> = {
-  parametrage: 'Paramétrage',
-  actif: 'Actif',
-  termine: 'Terminé',
-}
-
-function EvenementForm({ ev, onSaved }: { ev: Evenement | null; onSaved: () => void }) {
-  const [nom, setNom] = useState(ev?.nom ?? '')
-  const [lieu, setLieu] = useState(ev?.lieu ?? '')
-  const [debut, setDebut] = useState(ev?.date_debut ?? '')
-  const [fin, setFin] = useState(ev?.date_fin ?? '')
-  const [statut, setStatut] = useState<EvenementStatut>(ev?.statut ?? 'parametrage')
-  const [error, setError] = useState('')
-
-  async function save(): Promise<boolean> {
-    if (!nom || !debut || !fin) { setError('Nom et dates sont obligatoires.'); return false }
-    const payload = { nom, lieu: lieu || null, date_debut: debut, date_fin: fin, statut }
-    const { error } = ev
-      ? await sb.from('evenements').update(payload).eq('id', ev.id)
-      : await sb.from('evenements').insert(payload)
-    if (error) { setError(error.message); return false }
-    onSaved()
-    return true
-  }
-
-  return (
-    <Modal
-      title={ev ? 'Modifier l\'événement' : 'Nouvel événement'}
-      confirmLabel={ev ? 'Enregistrer' : 'Créer'}
-      onClose={onSaved}
-      onConfirm={save}
-    >
-      <Alert message={error} />
-      <div className="grid-2">
-        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-          <label>Nom de l'événement</label>
-          <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: Salon du Meuble Paris 2025" />
-        </div>
-        <div className="form-group">
-          <label>Date de début</label>
-          <DateInput value={debut} onChange={setDebut} />
-        </div>
-        <div className="form-group">
-          <label>Date de fin</label>
-          <DateInput value={fin} onChange={setFin} defaultMonth={debut} />
-        </div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-          <label>Lieu</label>
-          <input value={lieu} onChange={e => setLieu(e.target.value)} placeholder="Ex: Paris Expo Porte de Versailles" />
-        </div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-          <label>Statut</label>
-          <select value={statut} onChange={e => setStatut(e.target.value as EvenementStatut)}>
-            <option value="parametrage">Paramétrage</option>
-            <option value="actif">Actif</option>
-            <option value="termine">Terminé</option>
-          </select>
-        </div>
-      </div>
-    </Modal>
-  )
-}
+import { EVENEMENT_STATUT_LABEL } from '../lib/constants'
+import { EvenementForm } from '../components/EvenementForm'
+import type { Evenement } from '../types'
 
 export function EvenementsPage() {
   const navigate = useNavigate()
@@ -137,14 +73,10 @@ export function EvenementsPage() {
       ) : (
         <div className="events-grid">
           {displayed.map(ev => (
-            <div
-              key={ev.id}
-              className="event-card"
-              onClick={() => navigate(`/evenements/${ev.id}`)}
-            >
+            <div key={ev.id} className="event-card" onClick={() => navigate(`/evenements/${ev.id}`)}>
               <div className="event-card-header">
                 <div className="event-card-title">{ev.nom}</div>
-                <span className={`badge badge-${ev.statut}`}>{STATUT_LABEL[ev.statut]}</span>
+                <span className={`badge badge-${ev.statut}`}>{EVENEMENT_STATUT_LABEL[ev.statut]}</span>
               </div>
               <div className="event-card-meta">
                 {ev.lieu && <span>📍 {ev.lieu}</span>}
