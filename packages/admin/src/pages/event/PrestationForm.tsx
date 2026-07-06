@@ -243,15 +243,32 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         const now = new Date().toISOString()
         if (prest?.id) {
           const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
-          await db.prestations.update(prest.id, {
+          const existsPrest = await db.prestations.get(prest.id)
+          const updatePayload = {
             stand_id: standId, libelle, categorie: categorie || null,
             quantite_attendue: qte, emplacement_prevu: emplacement || null,
             prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
             ...aPatch,
-            pending_sync: 1,
-          })
+            pending_sync: 1 as const,
+          }
+          if (existsPrest) {
+            await db.prestations.update(prest.id, updatePayload)
+          } else {
+            await db.prestations.put({
+              id: prest.id,
+              statut_conformite: (cStatut || prest.statut_conformite || null) as ControleStatut | null,
+              quantite_constatee: cStatut ? (cQte !== '' ? parseInt(cQte) : null) : (prest.quantite_constatee ?? null),
+              commentaire: cStatut ? (cComment || null) : (prest.commentaire ?? null),
+              controleur_id: prest.controleur_id ?? null,
+              date_controle: cStatut ? now : (prest.date_controle ?? null),
+              anomalie: (aPatch.anomalie as boolean | undefined) ?? prest.anomalie ?? false,
+              date_anomalie: (aPatch.date_anomalie as string | undefined) ?? prest.date_anomalie ?? null,
+              date_retour_a_verifier: (aPatch.date_retour_a_verifier as string | undefined) ?? prest.date_retour_a_verifier ?? null,
+              ...updatePayload,
+            })
+          }
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
           }
