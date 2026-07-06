@@ -215,8 +215,16 @@ function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
         <PrestationForm
           prest={editingPrestation} evenementId={ev.id}
           onSaved={async () => {
-            const { data } = await sb.from('prestations').select('*, stands(*), users(nom, prenom)').eq('id', editingPrestation.id).single()
-            if (data) onPrestationSaved(data)
+            let updated: Prestation | null = null
+            if (navigator.onLine) {
+              const { data } = await sb.from('prestations').select('*, stands(*), users(nom, prenom)').eq('id', editingPrestation.id).single()
+              updated = data ?? null
+            }
+            if (!updated) {
+              const local = await db.prestations.get(editingPrestation.id)
+              if (local) updated = { ...editingPrestation, ...(local as unknown as Partial<Prestation>) }
+            }
+            if (updated) onPrestationSaved(updated)
             setEditingPrestation(null)
           }}
           onGoToStands={() => setEditingPrestation(null)}
@@ -356,8 +364,16 @@ function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
         <PrestationForm
           prest={editingPrestation} evenementId={ev.id}
           onSaved={async () => {
-            const { data } = await sb.from('prestations').select('*, stands(numero, nom_exposant), users(nom, prenom)').eq('id', editingPrestation.id).single()
-            if (data) onPrestationSaved(data)
+            let updated: Prestation | null = null
+            if (navigator.onLine) {
+              const { data } = await sb.from('prestations').select('*, stands(numero, nom_exposant), users(nom, prenom)').eq('id', editingPrestation.id).single()
+              updated = data ?? null
+            }
+            if (!updated) {
+              const local = await db.prestations.get(editingPrestation.id)
+              if (local) updated = { ...editingPrestation, ...(local as unknown as Partial<Prestation>) }
+            }
+            if (updated) onPrestationSaved(updated)
             setEditingPrestation(null)
           }}
           onGoToStands={() => setEditingPrestation(null)}
