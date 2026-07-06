@@ -211,7 +211,7 @@ export function DashboardPage() {
               <thead>
                 <tr>
                   {(['Événement', 'Titre', 'État', 'Date'] as const).map((h, i) => (
-                    <th key={h} style={{ textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 8px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', ...(i > 1 ? { hideOnMobile: true } : {}) }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 8px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Mail, Bell, Smartphone } from 'lucide-react'
 import { sb, sbAdmin } from '../lib/supabase'
+import { fmtDateHeure } from '../lib/format'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Alert } from '../components/ui/Alert'
@@ -98,9 +99,10 @@ function PushModal({ user, onClose, notify }: { user: User; onClose: () => void;
     if (!title.trim() || !body.trim()) return
     setSending(true)
     try {
+      const { data: { session } } = await sb.auth.getSession()
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_ROLE}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string },
         body: JSON.stringify({ user_ids: [user.id], title: title.trim(), body: body.trim() }),
       })
       const data = await res.json()
@@ -212,7 +214,7 @@ function DevicesModal({ user, onClose, notify }: { user: User; onClose: () => vo
                     {[os, browser].filter(Boolean).join(' · ')}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    Enregistré le {new Date(s.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    Enregistré le {fmtDateHeure(s.created_at)}
                   </div>
                 </div>
                 <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => revoke(s.endpoint)}>Révoquer</button>
@@ -271,7 +273,7 @@ export function UtilisateursPage() {
               { key: 'nom', label: 'Nom', sortable: true, filterable: true, getValue: u => `${u.prenom} ${u.nom}`, render: u => <span style={{ fontWeight: 600 }}>{u.prenom} {u.nom}</span> },
               { key: 'email', label: 'Email', sortable: true, filterable: true },
               { key: 'is_admin', label: 'Profil', sortable: true, filterable: true, options: [{ value: 'Admin', label: 'Admin' }, { value: 'Utilisateur', label: 'Utilisateur' }], getValue: u => u.is_admin ? 'Admin' : 'Utilisateur', render: u => u.is_admin ? <Badge statut="admin" /> : <Badge statut="organisateur" /> },
-              { key: 'last_sign_in_at', label: 'Dernière connexion', sortable: true, hideOnMobile: true, getValue: u => u.last_sign_in_at ?? '', render: u => u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : <span className="text-muted">Jamais</span> },
+              { key: 'last_sign_in_at', label: 'Dernière connexion', sortable: true, hideOnMobile: true, getValue: u => u.last_sign_in_at ?? '', render: u => u.last_sign_in_at ? fmtDateHeure(u.last_sign_in_at) : <span className="text-muted">Jamais</span> },
               { key: 'actions', label: '', render: u => (
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button className="btn btn-secondary btn-sm" title="Envoyer une invitation" onClick={e => { e.stopPropagation(); setInviting({ email: u.email, userId: u.id }) }} style={{ padding: '5px 7px', lineHeight: 0 }}><Mail size={15} /></button>
