@@ -187,12 +187,32 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         if (isOffline) {
           const now = new Date().toISOString()
           const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
-          await db.prestations.update(prest.id, {
+          const patch = {
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, date_controle: now } : {}),
             ...aPatch,
-            pending_sync: 1,
-          })
+            pending_sync: 1 as const,
+          }
+          const exists = await db.prestations.get(prest.id)
+          if (exists) {
+            await db.prestations.update(prest.id, patch)
+          } else {
+            await db.prestations.put({
+              id: prest.id, stand_id: prest.stand_id,
+              prestataire_id: prest.prestataire_id ?? null,
+              libelle: prest.libelle, categorie: prest.categorie ?? null,
+              quantite_attendue: prest.quantite_attendue ?? 1,
+              emplacement_prevu: prest.emplacement_prevu ?? null,
+              ajout_sur_site: prest.ajout_sur_site ?? false,
+              commentaire: prest.commentaire ?? null,
+              controleur_id: prest.controleur_id ?? null,
+              date_controle: prest.date_controle ?? null,
+              anomalie: prest.anomalie ?? false,
+              date_anomalie: prest.date_anomalie ?? null,
+              date_retour_a_verifier: prest.date_retour_a_verifier ?? null,
+              ...patch,
+            })
+          }
           onSaved(); return true
         }
         const { data: { user } } = await sb.auth.getUser()

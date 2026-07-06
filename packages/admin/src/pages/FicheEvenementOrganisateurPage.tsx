@@ -224,7 +224,7 @@ function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
               const local = await db.prestations.get(editingPrestation.id)
               if (local) updated = { ...editingPrestation, ...(local as unknown as Partial<Prestation>) }
             }
-            if (updated) onPrestationSaved(updated)
+            onPrestationSaved(updated ?? editingPrestation)
             setEditingPrestation(null)
           }}
           onGoToStands={() => setEditingPrestation(null)}
@@ -373,7 +373,7 @@ function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
               const local = await db.prestations.get(editingPrestation.id)
               if (local) updated = { ...editingPrestation, ...(local as unknown as Partial<Prestation>) }
             }
-            if (updated) onPrestationSaved(updated)
+            onPrestationSaved(updated ?? editingPrestation)
             setEditingPrestation(null)
           }}
           onGoToStands={() => setEditingPrestation(null)}
