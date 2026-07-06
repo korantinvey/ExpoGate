@@ -210,7 +210,7 @@ export function DashboardPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
-                  {(['Événement', 'Titre', 'État', 'Date'] as const).map((h, i) => (
+                  {(['Événement', 'Titre', 'État', 'Date'] as const).map((h) => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 8px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
