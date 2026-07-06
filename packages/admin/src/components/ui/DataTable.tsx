@@ -173,7 +173,7 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
 
   return (
     <table>
-      <thead>
+      <thead style={{ position: 'relative', zIndex: 1 }}>
         <tr>
           {selectable && (
             <th style={{ width: 36, textAlign: 'center', padding: '8px 4px' }}>
