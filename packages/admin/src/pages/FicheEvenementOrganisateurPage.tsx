@@ -20,6 +20,7 @@ import { TabPrestataires } from './event/TabPrestataires'
 import { TabUtilisateurs } from './event/UserAccesList'
 import { StandPrestationsModal } from './event/StandPrestationsModal'
 import { PrestationForm } from './event/PrestationForm'
+import { useSidebarNav } from '../contexts/SidebarNavContext'
 
 function TabDetails({ ev, onEdit }: { ev: Evenement; onEdit: () => void }) {
   return (
@@ -43,29 +44,31 @@ function TabDetails({ ev, onEdit }: { ev: Evenement; onEdit: () => void }) {
 type OrgTab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante'
 
 function VueOrganisateur({ ev, onReload }: { ev: Evenement; onReload: () => void }) {
-  const [tab, setTab] = useState<OrgTab>('dashboard')
   const [editing, setEditing] = useState(false)
+  const { setNavItems, setActiveNav, activeNav } = useSidebarNav()
 
-  const TAB_LABELS: Record<OrgTab, string> = {
-    dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands',
-    prestations: 'Prestations', prestataires: 'Prestataires',
-    utilisateurs: 'Utilisateurs', main_courante: 'Main courante',
-  }
+  const tab = (activeNav as OrgTab) || 'dashboard'
+
+  useEffect(() => {
+    setNavItems([
+      { key: 'dashboard', label: 'Tableau de bord' },
+      { key: 'details', label: 'Détails' },
+      { key: 'stands', label: 'Stands' },
+      { key: 'prestations', label: 'Prestations' },
+      { key: 'prestataires', label: 'Prestataires' },
+      { key: 'utilisateurs', label: 'Utilisateurs' },
+      { key: 'main_courante', label: 'Main courante' },
+    ])
+    setActiveNav('dashboard')
+    return () => { setNavItems([]); setActiveNav('') }
+  }, [])
 
   return (
     <>
-      <div className="tabs" style={{ marginBottom: 20 }}>
-        {(Object.keys(TAB_LABELS) as OrgTab[]).map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </div>
-
       <div style={{ display: tab === 'dashboard' ? undefined : 'none' }}><TabDashboard ev={ev} /></div>
       <div style={{ display: tab === 'details' ? undefined : 'none' }}><TabDetails ev={ev} onEdit={() => setEditing(true)} /></div>
       <div style={{ display: tab === 'stands' ? undefined : 'none' }}><TabStands ev={ev} /></div>
-      <div style={{ display: tab === 'prestations' ? undefined : 'none' }}><TabPrestations ev={ev} onGoToStands={() => setTab('stands')} /></div>
+      <div style={{ display: tab === 'prestations' ? undefined : 'none' }}><TabPrestations ev={ev} onGoToStands={() => setActiveNav('stands')} /></div>
       <div style={{ display: tab === 'prestataires' ? undefined : 'none' }}><TabPrestataires ev={ev} /></div>
       <div style={{ display: tab === 'utilisateurs' ? undefined : 'none' }}><TabUtilisateurs ev={ev} /></div>
       <div style={{ display: tab === 'main_courante' ? undefined : 'none' }}><TabMainCourante ev={ev} canDelete /></div>
@@ -81,10 +84,22 @@ function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
   const [stands, setStands] = useState<(Stand & { prestations: Prestation[] })[]>([])
   const [viewingPrestations, setViewingPrestations] = useState<(Stand & { prestations: Prestation[] }) | null>(null)
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
-  const [tab, setTab] = useState<PrestaTab>('dashboard')
   const [exportFnStands, setExportFnStands] = useState<(() => void) | null>(null)
   const [exportFnPresta, setExportFnPresta] = useState<(() => void) | null>(null)
   const [allPendingSyncIds, setAllPendingSyncIds] = useState<Set<string>>(new Set())
+  const { setNavItems, setActiveNav, activeNav } = useSidebarNav()
+
+  const tab = (activeNav as PrestaTab) || 'dashboard'
+
+  useEffect(() => {
+    setNavItems([
+      { key: 'dashboard', label: 'Tableau de bord' },
+      { key: 'stands', label: 'Mes stands' },
+      { key: 'prestations', label: 'Mes prestations' },
+    ])
+    setActiveNav('dashboard')
+    return () => { setNavItems([]); setActiveNav('') }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -126,12 +141,6 @@ function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
 
   return (
     <>
-      <div className="tabs">
-        {([['dashboard', 'Tableau de bord'], ['stands', 'Mes stands'], ['prestations', 'Mes prestations']] as [PrestaTab, string][]).map(([t, label]) => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{label}</button>
-        ))}
-      </div>
-
       {tab === 'dashboard' && (
         <ConformiteStats
           nbStands={nbStands} nbNonVerif={nbNonVerif} nbConforme={nbConforme}
@@ -238,11 +247,24 @@ function VuePrestataire({ ev, userId }: { ev: Evenement; userId: string }) {
 type ControleurTab = 'dashboard' | 'stands' | 'prestations' | 'main_courante'
 
 function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
-  const [tab, setTab] = useState<ControleurTab>('dashboard')
   const [stands, setStands] = useState<(Stand & { prestations: Prestation[] })[]>([])
   const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null)
   const [exportFnStands, setExportFnStands] = useState<(() => void) | null>(null)
   const [exportFnPresta, setExportFnPresta] = useState<(() => void) | null>(null)
+  const { setNavItems, setActiveNav, activeNav } = useSidebarNav()
+
+  const tab = (activeNav as ControleurTab) || 'dashboard'
+
+  useEffect(() => {
+    setNavItems([
+      { key: 'dashboard', label: 'Tableau de bord' },
+      { key: 'stands', label: 'Mes stands' },
+      { key: 'prestations', label: 'Mes prestations' },
+      { key: 'main_courante', label: 'Main courante' },
+    ])
+    setActiveNav('dashboard')
+    return () => { setNavItems([]); setActiveNav('') }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -277,19 +299,8 @@ function VueControleur({ ev, userId }: { ev: Evenement; userId: string }) {
     setStands(prev => prev.map(s => ({ ...s, prestations: s.prestations.map(p => p.id === updated.id ? updated : p) })))
   }
 
-  const TAB_LABELS: Record<ControleurTab, string> = {
-    dashboard: 'Tableau de bord', stands: 'Mes stands',
-    prestations: 'Mes prestations', main_courante: 'Main courante',
-  }
-
   return (
     <>
-      <div className="tabs" style={{ marginBottom: 20 }}>
-        {(Object.keys(TAB_LABELS) as ControleurTab[]).map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
-        ))}
-      </div>
-
       {tab === 'dashboard' && (
         <ConformiteStats
           nbStands={nbStands} nbNonVerif={nbNonVerif} nbConforme={nbConforme}

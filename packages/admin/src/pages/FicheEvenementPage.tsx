@@ -14,6 +14,7 @@ import { TabPrestations } from './event/TabPrestations'
 import { TabPrestataires } from './event/TabPrestataires'
 import { TabUtilisateurs } from './event/UserAccesList'
 import { TabCorbeille } from './event/TabCorbeilleAdmin'
+import { useSidebarNav } from '../contexts/SidebarNavContext'
 
 function TabDetails({ ev }: { ev: Evenement }) {
   return (
@@ -32,18 +33,31 @@ function TabDetails({ ev }: { ev: Evenement }) {
 
 type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante' | 'corbeille'
 
-const TAB_LABELS: Record<Tab, string> = {
-  dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands',
-  prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs',
-  main_courante: 'Main courante', corbeille: 'Corbeille',
-}
+const TAB_ITEMS = [
+  { key: 'dashboard', label: 'Tableau de bord' },
+  { key: 'details', label: 'Détails' },
+  { key: 'stands', label: 'Stands' },
+  { key: 'prestations', label: 'Prestations' },
+  { key: 'prestataires', label: 'Prestataires' },
+  { key: 'utilisateurs', label: 'Utilisateurs' },
+  { key: 'main_courante', label: 'Main courante' },
+  { key: 'corbeille', label: 'Corbeille' },
+] as const
 
 export function FicheEvenementPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [ev, setEv] = useState<Evenement | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
   const [editing, setEditing] = useState(false)
+  const { setNavItems, setActiveNav, activeNav } = useSidebarNav()
+
+  const tab = (activeNav as Tab) || 'dashboard'
+
+  useEffect(() => {
+    setNavItems([...TAB_ITEMS])
+    setActiveNav('dashboard')
+    return () => { setNavItems([]); setActiveNav('') }
+  }, [])
 
   async function load() {
     if (!id) { navigate('/evenements'); return }
@@ -77,18 +91,10 @@ export function FicheEvenementPage() {
         </div>
       </div>
 
-      <div className="tabs">
-        {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </div>
-
       {tab === 'dashboard' && <TabDashboard ev={ev} />}
       {tab === 'details' && <TabDetails ev={ev} />}
       {tab === 'stands' && <TabStands ev={ev} />}
-      {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
+      {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setActiveNav('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
       {tab === 'main_courante' && <TabMainCourante ev={ev} canDelete />}
