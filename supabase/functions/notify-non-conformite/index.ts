@@ -107,6 +107,21 @@ Deno.serve(async (req) => {
     const standInfo = stand ? `${stand.numero}${stand.nom_exposant ? ` — ${stand.nom_exposant}` : ''}` : '—'
     const categorie = presta.categorie ? ` (${presta.categorie})` : ''
 
+    // Génère un token d'action valable 7 jours (uniquement pour les statuts nécessitant une correction)
+    let actionLink: string | null = null
+    if (statut === 'non_conforme' || statut === 'absent') {
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: tokenRow } = await sbAdmin
+        .from('action_tokens')
+        .insert({ prestation_id: prestation_id, action: 'a_verifier', expires_at: expiresAt })
+        .select('id')
+        .single()
+      if (tokenRow?.id) {
+        const baseUrl = Deno.env.get('SUPABASE_URL')!
+        actionLink = `${baseUrl}/functions/v1/handle-action-token?token=${tokenRow.id}`
+      }
+    }
+
     const html = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -153,6 +168,13 @@ Deno.serve(async (req) => {
               </td>
             </tr>` : ''}
           </table>
+          ${actionLink ? `
+          <div style="text-align:center;margin-bottom:24px;">
+            <a href="${actionLink}" style="display:inline-block;padding:12px 28px;background:#1e293b;color:#ffffff;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
+              ✅ J'ai corrigé — repasser en "À vérifier"
+            </a>
+            <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;">Ce lien est à usage unique et valable 7 jours.</p>
+          </div>` : ''}
           <p style="margin:0;color:#64748b;font-size:13px;">
             Veuillez prendre les mesures correctives nécessaires et contacter l'organisateur de l'événement.<br>
             Cet email est envoyé automatiquement par la plateforme Expogate.
