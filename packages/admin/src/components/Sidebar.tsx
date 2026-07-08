@@ -59,10 +59,10 @@ export function Sidebar({ open, onClose }: Props) {
             </>
           )}
 
-          {/* Non-admin : lien retour Mes événements */}
+          {/* Non-admin : lien Mes événements (flèche retour seulement si on est dans un événement) */}
           {!isAdmin && (
             <NavLink to="/" end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
-              <span className="nav-icon">◀</span> Mes événements
+              {navItems.length > 0 && <span className="nav-icon">◀</span>} Mes événements
             </NavLink>
           )}
 
