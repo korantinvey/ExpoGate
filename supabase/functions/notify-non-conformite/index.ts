@@ -107,6 +107,21 @@ Deno.serve(async (req) => {
     const standInfo = stand ? `${stand.numero}${stand.nom_exposant ? ` — ${stand.nom_exposant}` : ''}` : '—'
     const categorie = presta.categorie ? ` (${presta.categorie})` : ''
 
+    // Génère un token email pour les statuts nécessitant une correction (non_conforme, absent)
+    let actionUrl: string | null = null
+    if (statut === 'non_conforme' || statut === 'absent') {
+      const { data: newToken } = await sbAdmin
+        .from('email_action_tokens')
+        .insert({ prestation_id: prestation_id, action: 'a_verifier' })
+        .select('id')
+        .single()
+
+      if (newToken) {
+        const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://expogate.pages.dev'
+        actionUrl = `${frontendUrl}/confirm?token=${newToken.id}`
+      }
+    }
+
     const html = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -153,6 +168,21 @@ Deno.serve(async (req) => {
               </td>
             </tr>` : ''}
           </table>
+          ${actionUrl ? `
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td align="center">
+              <a href="${actionUrl}"
+                 style="display:inline-block;padding:12px 28px;background:#1e293b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">
+                Signaler ma correction →
+              </a>
+            </td></tr>
+            <tr><td style="padding-top:10px;">
+              <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+                En cliquant, vous indiquez que la non-conformité a été corrigée et demandez une re-vérification.<br>
+                Une page de confirmation s'affichera avant l'envoi.
+              </p>
+            </td></tr>
+          </table>` : ''}
           <p style="margin:0;color:#64748b;font-size:13px;">
             Veuillez prendre les mesures correctives nécessaires et contacter l'organisateur de l'événement.<br>
             Cet email est envoyé automatiquement par la plateforme Expogate.

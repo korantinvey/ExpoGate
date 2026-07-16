@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL *)",
+      "mcp__visualize__read_me",
+      "mcp__Claude_in_Chrome__find"
+    ]
+  }
+}

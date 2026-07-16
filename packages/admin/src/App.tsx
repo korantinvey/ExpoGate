@@ -14,6 +14,7 @@ import { EvenementsOrganisateurPage } from './pages/EvenementsOrganisateurPage'
 import { FicheEvenementOrganisateurPage } from './pages/FicheEvenementOrganisateurPage'
 import { ControleurEventPage } from './pages/ControleurEventPage'
 import { ControleurStandPage } from './pages/ControleurStandPage'
+import { ConfirmAVerifierPage } from './pages/ConfirmAVerifierPage'
 import { sb } from './lib/supabase'
 import { syncPending, getPendingCount } from './lib/sync'
 import { usePushNotifications } from './hooks/usePushNotifications'
@@ -195,6 +196,14 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  if (window.location.pathname === '/confirm') {
+    return (
+      <ThemeContext.Provider value={themeCtx}>
+        <ConfirmAVerifierPage />
+      </ThemeContext.Provider>
+    )
+  }
 
   if (isRecovery) {
     return (
