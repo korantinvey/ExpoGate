@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+const API = `${SUPABASE_URL}/functions/v1/confirm-a-verifier`
 
 const STATUT_LABELS: Record<string, string> = {
   non_conforme: 'Non conforme',
@@ -16,6 +17,8 @@ const STATUT_COLORS: Record<string, string> = {
   a_verifier: '#6b7280',
 }
 
+type Photo = { id: string; url: string; preview: string; uploading?: boolean; error?: boolean }
+
 type State =
   | { phase: 'loading' }
   | { phase: 'error'; message: string }
@@ -26,12 +29,14 @@ type State =
 export function ConfirmAVerifierPage() {
   const token = new URLSearchParams(window.location.search).get('token')
   const [state, setState] = useState<State>({ phase: 'loading' })
+  const [photos, setPhotos] = useState<Photo[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!token) { setState({ phase: 'error', message: 'Lien invalide ou incomplet.' }); return }
 
-    fetch(`${SUPABASE_URL}/functions/v1/confirm-a-verifier?token=${token}`)
+    fetch(`${API}?token=${token}`)
       .then(r => r.json())
       .then(data => {
         if (data.error === 'deja_utilise') { setState({ phase: 'deja_utilise' }); return }
@@ -42,11 +47,49 @@ export function ConfirmAVerifierPage() {
       .catch(() => setState({ phase: 'error', message: 'Impossible de contacter le serveur.' }))
   }, [token])
 
+  async function handleFiles(files: FileList) {
+    const newPhotos: Photo[] = Array.from(files).map(f => ({
+      id: crypto.randomUUID(),
+      url: '',
+      preview: URL.createObjectURL(f),
+      uploading: true,
+    }))
+    setPhotos(prev => [...prev, ...newPhotos])
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const localId = newPhotos[i].id
+      const form = new FormData()
+      form.append('photo', file)
+
+      try {
+        const r = await fetch(`${API}?token=${token}&upload=true`, { method: 'POST', body: form })
+        const data = await r.json()
+        if (data.url) {
+          setPhotos(prev => prev.map(p => p.id === localId ? { ...p, url: data.url, uploading: false } : p))
+        } else {
+          setPhotos(prev => prev.map(p => p.id === localId ? { ...p, uploading: false, error: true } : p))
+        }
+      } catch {
+        setPhotos(prev => prev.map(p => p.id === localId ? { ...p, uploading: false, error: true } : p))
+      }
+    }
+  }
+
+  function removePhoto(id: string) {
+    setPhotos(prev => {
+      const p = prev.find(p => p.id === id)
+      if (p) URL.revokeObjectURL(p.preview)
+      return prev.filter(p => p.id !== id)
+    })
+  }
+
   async function handleConfirm() {
     if (!token) return
+    if (photos.some(p => p.uploading)) return
     setSubmitting(true)
     try {
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/confirm-a-verifier?token=${token}`, { method: 'POST' })
+      const r = await fetch(`${API}?token=${token}`, { method: 'POST' })
       const data = await r.json()
       if (data.success) {
         const s = state as Extract<State, { phase: 'confirm' }>
@@ -61,6 +104,8 @@ export function ConfirmAVerifierPage() {
       setSubmitting(false)
     }
   }
+
+  const uploading = photos.some(p => p.uploading)
 
   return (
     <div style={{ minHeight: '100vh', background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
@@ -104,23 +149,25 @@ export function ConfirmAVerifierPage() {
                   Vous êtes sur le point de signaler que la non-conformité ci-dessous a été <strong>corrigée</strong>.
                   Un contrôleur passera ensuite vérifier l'installation.
                 </p>
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 16, marginBottom: 24 }}>
+
+                {/* Détails prestation */}
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 16, marginBottom: 20 }}>
                   {stand?.evenement_nom && (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }}>Événement</div>
-                      <div style={{ fontSize: 15, color: '#0f172a', fontWeight: 600 }}>{stand.evenement_nom}</div>
+                      <div style={labelStyle}>Événement</div>
+                      <div style={valueStyle}>{stand.evenement_nom}</div>
                     </div>
                   )}
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }}>Prestation</div>
-                    <div style={{ fontSize: 15, color: '#0f172a', fontWeight: 600 }}>{prestation.libelle}{categorie}</div>
+                    <div style={labelStyle}>Prestation</div>
+                    <div style={valueStyle}>{prestation.libelle}{categorie}</div>
                   </div>
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }}>Stand</div>
-                    <div style={{ fontSize: 15, color: '#0f172a', fontWeight: 600 }}>{standInfo}</div>
+                    <div style={labelStyle}>Stand</div>
+                    <div style={valueStyle}>{standInfo}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 4 }}>Statut actuel</div>
+                    <div style={labelStyle}>Statut actuel</div>
                     <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 13, fontWeight: 600, background: `${STATUT_COLORS[statut] ?? '#6b7280'}20`, color: STATUT_COLORS[statut] ?? '#6b7280' }}>
                       {STATUT_LABELS[statut] ?? statut}
                     </span>
@@ -129,19 +176,70 @@ export function ConfirmAVerifierPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Section photos */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>
+                    Photos de preuve <span style={{ fontWeight: 400, color: '#64748b' }}>(optionnel)</span>
+                  </div>
+
+                  {photos.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                      {photos.map(p => (
+                        <div key={p.id} style={{ position: 'relative', width: 80, height: 80, borderRadius: 6, overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                          <img src={p.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: p.uploading ? 0.5 : p.error ? 0.4 : 1 }} />
+                          {p.uploading && (
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>⏳</div>
+                          )}
+                          {p.error && (
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>❌</div>
+                          )}
+                          {!p.uploading && (
+                            <button
+                              onClick={() => removePhoto(p.id)}
+                              style={{ position: 'absolute', top: 2, right: 2, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                            >✕</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', border: '1px dashed #cbd5e1', borderRadius: 6, background: '#f8fafc', color: '#475569', fontSize: 13, cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+                  >
+                    📷 Ajouter des photos
+                  </button>
+                </div>
+
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '12px 16px', color: '#1d4ed8', fontSize: 13, lineHeight: 1.5 }}>
                   En confirmant, la prestation passera en statut <strong>« À vérifier »</strong> et
                   l'organisateur sera informé que vous avez apporté les corrections nécessaires.
                 </div>
               </div>
+
               <div style={{ padding: '0 28px 28px' }}>
                 <button
                   onClick={handleConfirm}
-                  disabled={submitting}
-                  style={{ display: 'block', width: '100%', padding: 12, border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', background: '#1e293b', color: '#fff', opacity: submitting ? 0.7 : 1 }}
+                  disabled={submitting || uploading}
+                  style={{ display: 'block', width: '100%', padding: 12, border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: (submitting || uploading) ? 'not-allowed' : 'pointer', background: '#1e293b', color: '#fff', opacity: (submitting || uploading) ? 0.7 : 1 }}
                 >
-                  {submitting ? 'Envoi en cours…' : 'Confirmer — ma correction est faite'}
+                  {uploading ? 'Upload en cours…' : submitting ? 'Envoi en cours…' : 'Confirmer — ma correction est faite'}
                 </button>
+                {uploading && (
+                  <p style={{ margin: '8px 0 0', textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                    Veuillez attendre la fin de l'envoi des photos.
+                  </p>
+                )}
               </div>
             </>
           )
@@ -153,7 +251,9 @@ export function ConfirmAVerifierPage() {
             <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Correction signalée !</div>
             <div style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
               Votre correction pour la prestation <strong>{state.libelle}</strong>
-              {state.stand && <> (stand {state.stand})</>} a bien été enregistrée.<br /><br />
+              {state.stand && <> (stand {state.stand})</>} a bien été enregistrée.
+              {photos.filter(p => p.url).length > 0 && <> {photos.filter(p => p.url).length} photo{photos.filter(p => p.url).length > 1 ? 's' : ''} jointe{photos.filter(p => p.url).length > 1 ? 's' : ''}.</>}
+              <br /><br />
               Un contrôleur passera vérifier votre installation prochainement.
             </div>
           </div>
@@ -162,3 +262,6 @@ export function ConfirmAVerifierPage() {
     </div>
   )
 }
+
+const labelStyle: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }
+const valueStyle: React.CSSProperties = { fontSize: 15, color: '#0f172a', fontWeight: 600 }

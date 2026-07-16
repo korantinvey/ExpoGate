@@ -69,8 +69,43 @@ Deno.serve(async (req) => {
     })
   }
 
-  // POST → confirme la correction
   if (req.method === 'POST') {
+    const upload = url.searchParams.get('upload') === 'true'
+
+    // POST ?upload=true → upload une photo
+    if (upload) {
+      const contentType = req.headers.get('content-type') ?? ''
+      if (!contentType.includes('multipart/form-data')) {
+        return json({ error: 'multipart_requis' }, 400)
+      }
+
+      const form = await req.formData()
+      const file = form.get('photo') as File | null
+      if (!file) return json({ error: 'fichier_manquant' }, 400)
+
+      const ext = file.type === 'image/png' ? 'png' : 'jpg'
+      const path = `${tok.prestation_id}/prestataire_${crypto.randomUUID()}.${ext}`
+
+      const { error: uploadErr } = await sbAdmin.storage
+        .from('Photos')
+        .upload(path, file, { contentType: file.type, upsert: false })
+
+      if (uploadErr) return json({ error: `upload_failed: ${uploadErr.message}` }, 500)
+
+      const { data: urlData } = sbAdmin.storage.from('Photos').getPublicUrl(path)
+
+      const { data: photoRow, error: insertErr } = await sbAdmin
+        .from('photos')
+        .insert({ prestation_id: tok.prestation_id, url: urlData.publicUrl, synced: true })
+        .select('id')
+        .single()
+
+      if (insertErr) return json({ error: `insert_failed: ${insertErr.message}` }, 500)
+
+      return json({ photo_id: photoRow.id, url: urlData.publicUrl })
+    }
+
+    // POST → confirme la correction
     const { error: updErr } = await sbAdmin
       .from('prestations')
       .update({
