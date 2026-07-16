@@ -30,6 +30,7 @@ export function ConfirmAVerifierPage() {
   const token = new URLSearchParams(window.location.search).get('token')
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [commentaire, setCommentaire] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -91,7 +92,11 @@ export function ConfirmAVerifierPage() {
     if (photos.some(p => p.uploading)) return
     setSubmitting(true)
     try {
-      const r = await fetch(`${API}?token=${token}`, { method: 'POST' })
+      const r = await fetch(`${API}?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentaire: commentaire.trim() || null }),
+      })
       const data = await r.json()
       if (data.success) {
         const s = state as Extract<State, { phase: 'confirm' }>
@@ -177,6 +182,20 @@ export function ConfirmAVerifierPage() {
                       <div style={{ marginTop: 8, color: '#374151', fontSize: 13, fontStyle: 'italic' }}>"{prestation.commentaire}"</div>
                     )}
                   </div>
+                </div>
+
+                {/* Commentaire de correction */}
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>
+                    Commentaire <span style={{ fontWeight: 400, color: '#64748b' }}>(optionnel)</span>
+                  </label>
+                  <textarea
+                    value={commentaire}
+                    onChange={e => setCommentaire(e.target.value)}
+                    placeholder="Décrivez les corrections apportées…"
+                    rows={3}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14, color: '#0f172a', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }}
+                  />
                 </div>
 
                 {/* Section photos */}
