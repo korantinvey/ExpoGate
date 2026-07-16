@@ -130,9 +130,9 @@ Deno.serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);">
-        <tr><td style="background:#1e293b;padding:24px 32px;">
+        <tr><td style="background:#1D9E75;padding:24px 32px;">
           <span style="color:#ffffff;font-size:20px;font-weight:700;">Expogate</span>
-          <span style="color:#94a3b8;font-size:14px;margin-left:12px;">Alerte de conformité</span>
+          <span style="color:#d1fae5;font-size:14px;margin-left:12px;">Alerte de conformité</span>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Bonjour,</p>
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr><td align="center">
               <a href="${actionUrl}"
-                 style="display:inline-block;padding:12px 28px;background:#1e293b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">
+                 style="display:inline-block;padding:12px 28px;background:#1D9E75;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">
                 Signaler ma correction →
               </a>
             </td></tr>

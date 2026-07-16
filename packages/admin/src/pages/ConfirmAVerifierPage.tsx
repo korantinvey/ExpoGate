@@ -117,9 +117,9 @@ export function ConfirmAVerifierPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 6px rgba(0,0,0,.10)', maxWidth: 480, width: '100%', overflow: 'hidden' }}>
-        <div style={{ background: '#1e293b', padding: '20px 28px', display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <div style={{ background: '#1D9E75', padding: '20px 28px', display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <span style={{ color: '#fff', fontSize: 18, fontWeight: 700 }}>Expogate</span>
-          <span style={{ color: '#94a3b8', fontSize: 13 }}>Confirmation de correction</span>
+          <span style={{ color: '#d1fae5', fontSize: 13 }}>Confirmation de correction</span>
         </div>
 
         {state.phase === 'loading' && (
@@ -284,7 +284,7 @@ export function ConfirmAVerifierPage() {
                 <button
                   onClick={handleConfirm}
                   disabled={submitting || uploading}
-                  style={{ display: 'block', width: '100%', padding: 12, border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: (submitting || uploading) ? 'not-allowed' : 'pointer', background: '#1e293b', color: '#fff', opacity: (submitting || uploading) ? 0.7 : 1 }}
+                  style={{ display: 'block', width: '100%', padding: 12, border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: (submitting || uploading) ? 'not-allowed' : 'pointer', background: '#1D9E75', color: '#fff', opacity: (submitting || uploading) ? 0.7 : 1 }}
                 >
                   {uploading ? 'Upload en cours…' : submitting ? 'Envoi en cours…' : 'Confirmer — ma correction est faite'}
                 </button>
@@ -318,4 +318,4 @@ export function ConfirmAVerifierPage() {
 
 const labelStyle: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }
 const valueStyle: React.CSSProperties = { fontSize: 15, color: '#0f172a', fontWeight: 600 }
-const menuBtnStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 12px', border: 'none', borderRadius: 10, background: '#f8fafc', color: '#0f172a', fontSize: 16, fontWeight: 500, cursor: 'pointer', marginBottom: 8 }
+const menuBtnStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 12px', border: 'none', borderRadius: 10, background: '#f0fdf9', color: '#0f172a', fontSize: 16, fontWeight: 500, cursor: 'pointer', marginBottom: 8 }
