@@ -32,6 +32,8 @@ export function ConfirmAVerifierPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false)
 
   useEffect(() => {
     if (!token) { setState({ phase: 'error', message: 'Lien invalide ou incomplet.' }); return }
@@ -205,20 +207,52 @@ export function ConfirmAVerifierPage() {
                     </div>
                   )}
 
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }}
-                  />
+                  {/* input galerie */}
+                  <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }} />
+                  {/* input caméra */}
+                  <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }} />
+
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setShowPhotoMenu(true)}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', border: '1px dashed #cbd5e1', borderRadius: 6, background: '#f8fafc', color: '#475569', fontSize: 13, cursor: 'pointer', width: '100%', justifyContent: 'center' }}
                   >
                     📷 Ajouter des photos
                   </button>
+
+                  {/* Menu de choix */}
+                  {showPhotoMenu && (
+                    <div
+                      onClick={() => setShowPhotoMenu(false)}
+                      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+                    >
+                      <div
+                        onClick={e => e.stopPropagation()}
+                        style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 480, padding: '8px 16px 32px' }}
+                      >
+                        <div style={{ width: 36, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '10px auto 20px' }} />
+                        <button
+                          onClick={() => { setShowPhotoMenu(false); cameraInputRef.current?.click() }}
+                          style={menuBtnStyle}
+                        >
+                          <span style={{ fontSize: 22 }}>📷</span> Prendre une photo
+                        </button>
+                        <button
+                          onClick={() => { setShowPhotoMenu(false); fileInputRef.current?.click() }}
+                          style={menuBtnStyle}
+                        >
+                          <span style={{ fontSize: 22 }}>🖼️</span> Choisir dans la galerie
+                        </button>
+                        <button
+                          onClick={() => setShowPhotoMenu(false)}
+                          style={{ ...menuBtnStyle, color: '#94a3b8', marginTop: 8 }}
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '12px 16px', color: '#1d4ed8', fontSize: 13, lineHeight: 1.5 }}>
@@ -265,3 +299,4 @@ export function ConfirmAVerifierPage() {
 
 const labelStyle: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b', marginBottom: 2 }
 const valueStyle: React.CSSProperties = { fontSize: 15, color: '#0f172a', fontWeight: 600 }
+const menuBtnStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 12px', border: 'none', borderRadius: 10, background: '#f8fafc', color: '#0f172a', fontSize: 16, fontWeight: 500, cursor: 'pointer', marginBottom: 8 }
