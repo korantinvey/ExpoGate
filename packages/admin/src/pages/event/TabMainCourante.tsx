@@ -1,16 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
-import { sb, sbAdmin } from '../lib/supabase'
-import { db } from '../lib/db'
-import type { LocalStand } from '../lib/db'
-import { syncPending } from '../lib/sync'
-import { useAuth } from '../hooks/useAuth'
-import { Modal } from '../components/ui/Modal'
-import { Alert } from '../components/ui/Alert'
-import { DataTable } from '../components/ui/DataTable'
-import { ExportButton } from '../components/ui/ExportButton'
-import { compressImage } from '../lib/compressImage'
-import { useToast } from '../components/ui/Toast'
-import type { Evenement, MainCourante, McEtat } from '../types'
+import { sb } from '../../lib/supabase'
+import { db } from '../../lib/db'
+import type { LocalStand } from '../../lib/db'
+import { syncPending } from '../../lib/sync'
+import { uploadPhoto } from '../../lib/storage'
+import { fmtDateHeure } from '../../lib/format'
+import { useAuth } from '../../hooks/useAuth'
+import { Modal } from '../../components/ui/Modal'
+import { Alert } from '../../components/ui/Alert'
+import { DataTable } from '../../components/ui/DataTable'
+import { ExportButton } from '../../components/ui/ExportButton'
+import { StandSearchInput } from '../../components/ui/StandSearchInput'
+import { useToast } from '../../components/ui/Toast'
+import type { Evenement, MainCourante, McEtat } from '../../types'
 
 const ETAT_LABELS: Record<McEtat, string> = {
   a_traiter: 'À traiter',
@@ -31,13 +33,6 @@ function EtatBadge({ etat }: { etat: McEtat }) {
       {ETAT_LABELS[etat] ?? etat}
     </span>
   )
-}
-
-function fmtDateHeure(s: string) {
-  return new Date(s).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
 }
 
 // ── Formulaire ─────────────────────────────────────────────────────────────────
@@ -76,7 +71,7 @@ function McForm({ mc, evenementId, onSaved, canDelete = false }: { mc: MainCoura
 
   async function deleteExistingPhoto(id: string) {
     if (!confirm('Supprimer cette photo ?')) return
-    await sbAdmin.from('main_courante_photos').delete().eq('id', id)
+    await sb.from('main_courante_photos').delete().eq('id', id)
     setExistingPhotos(prev => prev.filter(p => p.id !== id))
   }
 
@@ -148,21 +143,12 @@ function McForm({ mc, evenementId, onSaved, canDelete = false }: { mc: MainCoura
       }
 
       if (newPhotos.length && savedId) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-        const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE as string
         for (const file of newPhotos) {
-          let compressed: File
-          try { compressed = await compressImage(file) } catch { compressed = file }
           const path = `main-courante/${savedId}/${crypto.randomUUID()}.jpg`
-          const res = await fetch(`${supabaseUrl}/storage/v1/object/Photos/${path}`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
-            body: compressed,
-          })
-          if (res.ok) {
-            const publicUrl = `${supabaseUrl}/storage/v1/object/public/Photos/${path}`
-            await sbAdmin.from('main_courante_photos').insert({ main_courante_id: savedId, url: publicUrl })
-          }
+          try {
+            const publicUrl = await uploadPhoto(file, path)
+            await sb.from('main_courante_photos').insert({ main_courante_id: savedId, url: publicUrl })
+          } catch { /* upload non bloquant */ }
         }
       }
 
@@ -191,50 +177,15 @@ function McForm({ mc, evenementId, onSaved, canDelete = false }: { mc: MainCoura
     >
       <Alert message={error} />
 
-      {/* Stand — étape 1 */}
-      <div className="form-group" style={{ position: 'relative' }}>
-        <label>Stand <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>(optionnel)</span></label>
-        <input
-          value={standSearch}
-          onChange={e => { setStandSearch(e.target.value); setStandId('') }}
-          placeholder="Rechercher par numéro ou nom d'exposant…"
-          autoComplete="off"
-        />
-        {standSearch && !standId && (() => {
-          const q = standSearch.toLowerCase()
-          const filtered = stands.filter(s =>
-            s.numero.toLowerCase().includes(q) ||
-            (s.nom_exposant ?? '').toLowerCase().includes(q)
-          )
-          return filtered.length > 0 ? (
-            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxHeight: 200, overflowY: 'auto', top: '100%', left: 0 }}>
-              {filtered.map(s => (
-                <div key={s.id}
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-                  onMouseDown={() => { setStandId(s.id); setStandSearch(`${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`) }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '')}
-                >
-                  <strong>{s.numero}</strong>{s.nom_exposant ? ` — ${s.nom_exposant}` : ''}
-                  {s.hall ? <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11 }}>Hall {s.hall}</span> : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px', fontSize: 13, color: 'var(--text-muted)', width: '100%', top: '100%', left: 0 }}>
-              Aucun stand trouvé
-            </div>
-          )
-        })()}
-        {standId && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ Stand sélectionné</span>
-            <button type="button" style={{ fontSize: 11, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }} onClick={() => { setStandId(''); setStandSearch('') }}>
-              ✕ Dissocier
-            </button>
-          </div>
-        )}
-      </div>
+      <StandSearchInput
+        stands={stands}
+        search={standSearch}
+        standId={standId}
+        onSearchChange={s => { setStandSearch(s); setStandId('') }}
+        onSelect={(id, label) => { setStandId(id); setStandSearch(label) }}
+        onClear={() => { setStandId(''); setStandSearch('') }}
+        optional
+      />
 
       <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 16px' }} />
 

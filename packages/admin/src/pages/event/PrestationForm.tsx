@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { sb, sbAdmin } from '../../lib/supabase'
 import { db } from '../../lib/db'
+import { uploadPhoto } from '../../lib/storage'
+import { notifyNonConformite } from '../../lib/notify'
+import { fmtDateHeure } from '../../lib/format'
 import { Modal } from '../../components/ui/Modal'
 import { Alert } from '../../components/ui/Alert'
-import { compressImage } from '../../lib/compressImage'
+import { StandSearchInput, standLabel } from '../../components/ui/StandSearchInput'
 import { useToast } from '../../components/ui/Toast'
 import type { Prestation, Stand, Prestataire, ControleStatut } from '../../types'
 import { STATUT_LABELS } from './helpers'
-
-function standLabel(s: { numero: string; nom_exposant?: string | null }) {
-  return `${s.numero}${s.nom_exposant ? ` — ${s.nom_exposant}` : ''}`
-}
 
 export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, initialStand, readOnly = false, canDelete = false, controleurMode = false }: {
   prest: Prestation | null
@@ -78,14 +77,14 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       } catch { /* réseau indisponible */ }
       setStandsLoading(false)
 
-      // Network: prestataires via sbAdmin (bypass RLS)
+      // Network: prestataires
       try {
-        const { data: ep } = await sbAdmin.from('evenement_prestataires')
+        const { data: ep } = await sb.from('evenement_prestataires')
           .select('prestataire_id')
           .eq('evenement_id', evenementId)
         const ids = (ep ?? []).map((r: { prestataire_id: string }) => r.prestataire_id).filter(Boolean)
         if (ids.length) {
-          const { data: p } = await sbAdmin.from('prestataires')
+          const { data: p } = await sb.from('prestataires')
             .select('id, raison_sociale, email_contact, telephone')
             .in('id', ids)
             .order('raison_sociale')
@@ -98,7 +97,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
     }
     loadForm()
     if (prest?.id) {
-      sbAdmin.from('photos').select('url').eq('prestation_id', prest.id).not('url', 'is', null)
+      sb.from('photos').select('url').eq('prestation_id', prest.id).not('url', 'is', null)
         .then(({ data }) => setPhotos((data ?? []).map((p: { url: string }) => p.url!)))
     }
   }, [])
@@ -119,20 +118,15 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
 
   async function uploadPendingPhotos(prestationId: string) {
     for (const file of newPhotos) {
-      let compressed: File
-      try { compressed = await compressImage(file) } catch { compressed = file }
       const path = `${prestationId}/${crypto.randomUUID()}.jpg`
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-      const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE as string
-      const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/Photos/${path}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
-        body: compressed,
-      })
-      if (!uploadRes.ok) { const errTxt = await uploadRes.text(); setCError(`Upload échoué : ${uploadRes.status} — ${errTxt}`); return }
-      const { data: { publicUrl } } = sbAdmin.storage.from('Photos').getPublicUrl(path)
-      const { error: insErr } = await sbAdmin.from('photos').insert({ prestation_id: prestationId, url: publicUrl, synced: true })
-      if (insErr) { setCError(`Enregistrement photo échoué : ${insErr.message}`); continue }
+      try {
+        const publicUrl = await uploadPhoto(file, path)
+        const { error: insErr } = await sb.from('photos').insert({ prestation_id: prestationId, url: publicUrl, synced: true })
+        if (insErr) { setCError(`Enregistrement photo échoué : ${insErr.message}`); continue }
+      } catch (err: unknown) {
+        setCError(`Upload échoué : ${err instanceof Error ? err.message : 'Erreur inconnue'}`)
+        return
+      }
     }
   }
 
@@ -179,18 +173,11 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
           date_controle: cStatut ? now : (prest.date_controle ?? null),
           ...anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now),
         }
-        const { error } = await sbAdmin.from('prestations').update(payload).eq('id', prest.id)
+        const { error } = await sb.from('prestations').update(payload).eq('id', prest.id)
         if (error) { setError(error.message); return false }
         if (newPhotos.length) await uploadPendingPhotos(prest.id)
         const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
-        if (shouldNotify) {
-          const { data: { session } } = await sb.auth.getSession()
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-non-conformite`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-            body: JSON.stringify({ prestation_id: prest.id }),
-          }).catch(() => {})
-        }
+        if (shouldNotify) await notifyNonConformite(prest.id)
         notify('Enregistré', 'success')
         onSaved(); return true
       }
@@ -200,12 +187,35 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         if (isOffline) {
           const now = new Date().toISOString()
           const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
-          await db.prestations.update(prest.id, {
-            commentaire_prestataire: commentairePrestataire || null,
-            ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, date_controle: now } : {}),
-            ...aPatch,
-            pending_sync: 1,
-          })
+          const exists = await db.prestations.get(prest.id)
+          if (exists) {
+            await db.prestations.update(prest.id, {
+              commentaire_prestataire: commentairePrestataire || null,
+              ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, date_controle: now } : {}),
+              ...aPatch,
+              pending_sync: 1,
+            })
+          } else {
+            const anomalie = (aPatch.anomalie as boolean | undefined) ?? prest.anomalie ?? false
+            const date_anomalie = (aPatch.date_anomalie as string | undefined) ?? prest.date_anomalie ?? null
+            const date_retour_a_verifier = (aPatch.date_retour_a_verifier as string | undefined) ?? prest.date_retour_a_verifier ?? null
+            await db.prestations.put({
+              id: prest.id, stand_id: prest.stand_id,
+              prestataire_id: prest.prestataire_id ?? null,
+              libelle: prest.libelle, categorie: prest.categorie ?? null,
+              quantite_attendue: prest.quantite_attendue ?? 1,
+              emplacement_prevu: prest.emplacement_prevu ?? null,
+              ajout_sur_site: prest.ajout_sur_site ?? false,
+              commentaire_prestataire: commentairePrestataire || null,
+              statut_conformite: (cStatut || prest.statut_conformite || null) as ControleStatut | null,
+              quantite_constatee: cStatut ? (cQte !== '' ? parseInt(cQte) : null) : (prest.quantite_constatee ?? null),
+              commentaire: prest.commentaire ?? null,
+              controleur_id: prest.controleur_id ?? null,
+              date_controle: cStatut ? now : (prest.date_controle ?? null),
+              anomalie, date_anomalie, date_retour_a_verifier,
+              pending_sync: 1,
+            })
+          }
           onSaved(); return true
         }
         const { data: { user } } = await sb.auth.getUser()
@@ -222,14 +232,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         const { error } = await sbAdmin.from('prestations').update(payload).eq('id', prest.id)
         if (error) { setError(error.message); notify(error.message); return false }
         const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
-        if (shouldNotify) {
-          const { data: { session } } = await sb.auth.getSession()
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-non-conformite`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-            body: JSON.stringify({ prestation_id: prest.id }),
-          }).catch(() => {})
-        }
+        if (shouldNotify) await notifyNonConformite(prest.id)
         notify('Enregistré', 'success')
         onSaved(); return true
       }
@@ -240,15 +243,32 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         const now = new Date().toISOString()
         if (prest?.id) {
           const aPatch = cStatut ? anomaliePatch(prest.statut_conformite, cStatut, prest.anomalie, prest.date_anomalie, prest.date_retour_a_verifier, now) : {}
-          await db.prestations.update(prest.id, {
+          const existsPrest = await db.prestations.get(prest.id)
+          const updatePayload = {
             stand_id: standId, libelle, categorie: categorie || null,
             quantite_attendue: qte, emplacement_prevu: emplacement || null,
             prestataire_id: prestaId || null, ajout_sur_site: ajoutSurSite,
             commentaire_prestataire: commentairePrestataire || null,
             ...(cStatut ? { statut_conformite: cStatut as ControleStatut, quantite_constatee: cQte !== '' ? parseInt(cQte) : null, commentaire: cComment || null, date_controle: now } : {}),
             ...aPatch,
-            pending_sync: 1,
-          })
+            pending_sync: 1 as const,
+          }
+          if (existsPrest) {
+            await db.prestations.update(prest.id, updatePayload)
+          } else {
+            await db.prestations.put({
+              id: prest.id,
+              statut_conformite: (cStatut || prest.statut_conformite || null) as ControleStatut | null,
+              quantite_constatee: cStatut ? (cQte !== '' ? parseInt(cQte) : null) : (prest.quantite_constatee ?? null),
+              commentaire: cStatut ? (cComment || null) : (prest.commentaire ?? null),
+              controleur_id: prest.controleur_id ?? null,
+              date_controle: cStatut ? now : (prest.date_controle ?? null),
+              anomalie: (aPatch.anomalie as boolean | undefined) ?? prest.anomalie ?? false,
+              date_anomalie: (aPatch.date_anomalie as string | undefined) ?? prest.date_anomalie ?? null,
+              date_retour_a_verifier: (aPatch.date_retour_a_verifier as string | undefined) ?? prest.date_retour_a_verifier ?? null,
+              ...updatePayload,
+            })
+          }
           for (const file of newPhotos) {
             await db.photos.add({ prestation_id: prest.id, blob: file, created_at: now, synced: 0, remote_url: null })
           }
@@ -313,14 +333,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
       }
       if (newPhotos.length && savedId) await uploadPendingPhotos(savedId)
       const shouldNotify = (cStatut === 'non_conforme' || cStatut === 'absent') && cStatut !== prest?.statut_conformite
-      if (shouldNotify && savedId) {
-        const { data: { session } } = await sb.auth.getSession()
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-non-conformite`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-          body: JSON.stringify({ prestation_id: savedId }),
-        }).catch(() => {})
-      }
+      if (shouldNotify && savedId) await notifyNonConformite(savedId)
       onSaved(); return true
     } finally { setUploading(false) }
   }
@@ -341,41 +354,14 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         </div>
       )}
       {!controleurMode && (<>
-      <div className="form-group" style={{ position: 'relative' }}>
-        <label>Stand</label>
-        <input
-          value={standSearch}
-          onChange={e => { if (!readOnly) { userEditedStand.current = true; setStandSearch(e.target.value); setStandId('') } }}
-          placeholder="Rechercher par numéro ou nom d'exposant…"
-          autoComplete="off"
-          readOnly={readOnly}
-          style={readOnly ? roStyle : undefined}
-        />
-        {standSearch && !standId && !readOnly && (() => {
-          const q = standSearch.toLowerCase()
-          const filtered = stands.filter(s => s.numero.toLowerCase().includes(q) || (s.nom_exposant ?? '').toLowerCase().includes(q))
-          return filtered.length > 0 ? (
-            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxHeight: 200, overflowY: 'auto', top: '100%', left: 0 }}>
-              {filtered.map(s => (
-                <div key={s.id}
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-                  onMouseDown={() => { setStandId(s.id); setStandSearch(standLabel(s)) }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '')}
-                >
-                  <strong>{s.numero}</strong>{s.nom_exposant ? ` — ${s.nom_exposant}` : ''}
-                  {s.hall ? <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 11 }}>Hall {s.hall}</span> : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ position: 'absolute', zIndex: 100, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px', fontSize: 13, color: 'var(--text-muted)', width: '100%', top: '100%', left: 0 }}>
-              Aucun stand trouvé
-            </div>
-          )
-        })()}
-        {standId && <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>✓ Stand sélectionné</div>}
-      </div>
+      <StandSearchInput
+        stands={stands}
+        search={standSearch}
+        standId={standId}
+        onSearchChange={s => { userEditedStand.current = true; setStandSearch(s); setStandId('') }}
+        onSelect={(id, label) => { setStandId(id); setStandSearch(label) }}
+        readOnly={readOnly}
+      />
       <div className="grid-2">
         <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Libellé</label><input value={libelle} onChange={e => { if (!readOnly) setLibelle(e.target.value) }} readOnly={readOnly} style={readOnly ? roStyle : undefined} /></div>
         <div className="form-group"><label>Catégorie</label><input value={categorie} onChange={e => { if (!readOnly) setCategorie(e.target.value) }} readOnly={readOnly} style={readOnly ? roStyle : undefined} /></div>
@@ -479,7 +465,7 @@ export function PrestationForm({ prest, evenementId, onSaved, onGoToStands, init
         </div>
         {prest?.date_controle && (
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Dernier contrôle : {new Date(prest.date_controle).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            Dernier contrôle : {fmtDateHeure(prest.date_controle)}
             {prest.users ? ` — ${prest.users.prenom} ${prest.users.nom}` : ''}
           </div>
         )}

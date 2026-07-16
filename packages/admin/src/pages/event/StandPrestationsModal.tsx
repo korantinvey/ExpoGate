@@ -52,7 +52,14 @@ export function StandPrestationsModal({ stand: standProp, evenementId, onClose, 
       <PrestationForm
         prest={editing === 'new' ? null : editing}
         evenementId={evenementId!}
-        onSaved={() => { setEditing(null); loadFromNetwork() }}
+        onSaved={async () => {
+          if (editing !== 'new') {
+            const local = await db.prestations.get((editing as Prestation).id)
+            if (local) setPrestations(prev => prev.map(p => p.id === local.id ? { ...p, ...local as unknown as Partial<Prestation> } : p))
+          }
+          setEditing(null)
+          loadFromNetwork()
+        }}
         onGoToStands={() => setEditing(null)}
         initialStand={editing !== 'new' ? stand : undefined}
         canDelete

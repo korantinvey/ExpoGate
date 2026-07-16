@@ -18,6 +18,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function loadUser(supaUser: SupaUser) {
     lastSupaUser.current = supaUser
+    if (!navigator.onLine) {
+      const cached = localStorage.getItem('cached_user_profile')
+      if (cached) {
+        try { setUser({ ...supaUser, ...JSON.parse(cached) }) } catch { setUser(null) }
+      } else setUser(null)
+      setLoading(false)
+      return
+    }
     try {
       const { data: profile, error } = await sb.from('users').select('*').eq('id', supaUser.id).single()
       if (error) throw error
@@ -41,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }))
       setUser({ ...supaUser, ...profile })
     } catch {
-      // Hors ligne : on utilise le profil mis en cache
+      // Erreur réseau : on utilise le profil mis en cache
       const cached = localStorage.getItem('cached_user_profile')
       if (cached) {
         try { setUser({ ...supaUser, ...JSON.parse(cached) }) } catch { setUser(null) }
@@ -81,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const expiresAt = session.expires_at ?? 0
       const fiveMinutes = 5 * 60
-      if (expiresAt - Date.now() / 1000 < fiveMinutes) {
+      if (expiresAt - Date.now() / 1000 < fiveMinutes && navigator.onLine) {
         sb.auth.refreshSession()
           .then(({ data: { session: refreshed } }) => {
             void loadUser(refreshed?.user ?? session.user)

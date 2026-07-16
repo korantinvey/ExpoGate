@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { ArrowUp, ArrowDown, ArrowUpDown, Filter, FilterX } from 'lucide-react'
 
@@ -39,34 +40,47 @@ function getVal<T>(row: T, col: Column<T>): string {
   return v == null ? '' : String(v)
 }
 
-function TextFilterPopover({ value, onChange, onClose }: { value: string; onChange: (v: string) => void; onClose: () => void }) {
+function usePopoverStyle(anchorEl: HTMLElement | null): React.CSSProperties {
+  if (!anchorEl) return { display: 'none' }
+  const r = anchorEl.getBoundingClientRect()
+  return {
+    position: 'fixed', top: r.bottom + 4, left: r.left, zIndex: 9999,
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '8px',
+  }
+}
+
+function TextFilterPopover({ value, onChange, onClose, anchorEl }: { value: string; onChange: (v: string) => void; onClose: () => void; anchorEl: HTMLElement | null }) {
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const style = usePopoverStyle(anchorEl)
   useEffect(() => {
     inputRef.current?.focus()
     function handler(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
-  return (
-    <div ref={ref} style={popoverStyle} onClick={e => e.stopPropagation()}>
+  return createPortal(
+    <div ref={ref} style={{ ...style, minWidth: 160 }} onClick={e => e.stopPropagation()}>
       <input ref={inputRef} value={value} onChange={e => onChange(e.target.value)} placeholder="Filtrer…"
         style={{ width: '100%', padding: '5px 8px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 4 }} />
       {value && <ClearBtn onClick={() => onChange('')} />}
-    </div>
+    </div>,
+    document.body
   )
 }
 
-function PicklistFilterPopover({ options, selected, onChange, onClose }: { options: { value: string; label: string }[]; selected: string[]; onChange: (v: string[]) => void; onClose: () => void }) {
+function PicklistFilterPopover({ options, selected, onChange, onClose, anchorEl }: { options: { value: string; label: string }[]; selected: string[]; onChange: (v: string[]) => void; onClose: () => void; anchorEl: HTMLElement | null }) {
   const ref = useRef<HTMLDivElement>(null)
+  const style = usePopoverStyle(anchorEl)
   useEffect(() => {
     function handler(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
   function toggle(value: string) { onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]) }
-  return (
-    <div ref={ref} style={{ ...popoverStyle, minWidth: 180 }} onClick={e => e.stopPropagation()}>
+  return createPortal(
+    <div ref={ref} style={{ ...style, minWidth: 180 }} onClick={e => e.stopPropagation()}>
       {options.map(opt => (
         <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', cursor: 'pointer', borderRadius: 4, fontSize: 13 }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg)')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
@@ -75,18 +89,13 @@ function PicklistFilterPopover({ options, selected, onChange, onClose }: { optio
         </label>
       ))}
       {selected.length > 0 && <ClearBtn onClick={() => onChange([])} />}
-    </div>
+    </div>,
+    document.body
   )
 }
 
 function ClearBtn({ onClick }: { onClick: () => void }) {
   return <button onClick={onClick} style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Effacer</button>
-}
-
-const popoverStyle: React.CSSProperties = {
-  position: 'absolute', top: '100%', left: 0, zIndex: 50,
-  background: 'var(--surface)', border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '8px', marginTop: 4,
 }
 
 export function DataTable<T extends { id?: string }>({ columns, data, onRowClick, rowStyle, emptyState, exportFilename, onExportReady, selectable, selectedIds, onSelectionChange, onFilteredRowsChange }: Props<T>) {
@@ -96,7 +105,7 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
   const [sortDir, setSortDir] = useState<SortDir>(null)
   const [textFilters, setTextFilters] = useState<Record<string, string>>({})
   const [pickFilters, setPickFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [openFilter, setOpenFilter] = useState<{ key: string; el: HTMLElement } | null>(null)
   const headerCheckRef = useRef<HTMLInputElement>(null)
 
   // Stabiliser la référence columns pour ne pas retrigger processed/onExportReady à chaque render parent
@@ -184,8 +193,9 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
           {visibleColumns.map(col => {
             const isPicklist = !!col.options
             const isFiltered = isPicklist ? (pickFilters[col.key]?.length ?? 0) > 0 : !!(textFilters[col.key]?.trim())
+            const isOpen = openFilter?.key === col.key
             return (
-              <th key={col.key} style={{ position: 'relative' }}>
+              <th key={col.key}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' }}>
                   {col.sortable ? (
                     <button onClick={() => toggleSort(col.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -196,16 +206,16 @@ export function DataTable<T extends { id?: string }>({ columns, data, onRowClick
                     </button>
                   ) : <span>{col.label}</span>}
                   {col.filterable && (
-                    <button onClick={e => { e.stopPropagation(); setOpenFilter(openFilter === col.key ? null : col.key) }} title="Filtrer"
+                    <button onClick={e => { e.stopPropagation(); setOpenFilter(isOpen ? null : { key: col.key, el: e.currentTarget }) }} title="Filtrer"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 3px', borderRadius: 4, lineHeight: 1, display: 'inline-flex', color: isFiltered ? 'var(--accent)' : 'var(--text-muted)', backgroundColor: isFiltered ? 'var(--accent-light)' : 'transparent' }}>
                       {isFiltered ? <FilterX size={13} /> : <Filter size={13} />}
                     </button>
                   )}
                 </div>
-                {col.filterable && openFilter === col.key && (
+                {col.filterable && isOpen && (
                   isPicklist
-                    ? <PicklistFilterPopover options={col.options!} selected={pickFilters[col.key] ?? []} onChange={v => setPickFilters(f => ({ ...f, [col.key]: v }))} onClose={() => setOpenFilter(null)} />
-                    : <TextFilterPopover value={textFilters[col.key] ?? ''} onChange={v => setTextFilters(f => ({ ...f, [col.key]: v }))} onClose={() => setOpenFilter(null)} />
+                    ? <PicklistFilterPopover options={col.options!} selected={pickFilters[col.key] ?? []} onChange={v => setPickFilters(f => ({ ...f, [col.key]: v }))} onClose={() => setOpenFilter(null)} anchorEl={openFilter?.el ?? null} />
+                    : <TextFilterPopover value={textFilters[col.key] ?? ''} onChange={v => setTextFilters(f => ({ ...f, [col.key]: v }))} onClose={() => setOpenFilter(null)} anchorEl={openFilter?.el ?? null} />
                 )}
               </th>
             )

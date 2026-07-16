@@ -101,6 +101,10 @@ export interface MainCourante {
   photos?: { id: string; url: string }[]
 }
 
+export interface EvenementAvecRole extends Evenement {
+  role_local: RoleLocal
+}
+
 export interface ControleurStand {
   id: string
   user_evenement_id: string

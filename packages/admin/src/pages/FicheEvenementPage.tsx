@@ -3,55 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { sb } from '../lib/supabase'
 import { db } from '../lib/db'
 import { downloadEvent } from '../lib/sync'
-import { Modal } from '../components/ui/Modal'
-import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
-import { DateInput } from '../components/ui/DateInput'
 import { fmtDate } from '../lib/format'
-import { TabMainCourante } from './TabMainCourante'
-import type { Evenement, EvenementStatut } from '../types'
+import { EvenementForm } from '../components/EvenementForm'
+import { TabMainCourante } from './event/TabMainCourante'
+import type { Evenement } from '../types'
 import { TabDashboard } from './event/TabDashboard'
 import { TabStands } from './event/TabStands'
 import { TabPrestations } from './event/TabPrestations'
 import { TabPrestataires } from './event/TabPrestataires'
 import { TabUtilisateurs } from './event/UserAccesList'
 import { TabCorbeille } from './event/TabCorbeilleAdmin'
-
-function EvenementForm({ ev, onSaved }: { ev: Evenement; onSaved: () => void }) {
-  const [nom, setNom] = useState(ev.nom)
-  const [lieu, setLieu] = useState(ev.lieu ?? '')
-  const [debut, setDebut] = useState(ev.date_debut)
-  const [fin, setFin] = useState(ev.date_fin)
-  const [statut, setStatut] = useState<EvenementStatut>(ev.statut)
-  const [error, setError] = useState('')
-
-  async function save(): Promise<boolean> {
-    if (!nom || !debut || !fin) { setError('Nom et dates sont obligatoires.'); return false }
-    const { error } = await sb.from('evenements').update({ nom, lieu: lieu || null, date_debut: debut, date_fin: fin, statut }).eq('id', ev.id)
-    if (error) { setError(error.message); return false }
-    onSaved(); return true
-  }
-
-  return (
-    <Modal title="Modifier l'événement" confirmLabel="Enregistrer" onClose={onSaved} onConfirm={save}>
-      <Alert message={error} />
-      <div className="grid-2">
-        <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Nom</label><input value={nom} onChange={e => setNom(e.target.value)} /></div>
-        <div className="form-group"><label>Date de début</label><DateInput value={debut} onChange={setDebut} /></div>
-        <div className="form-group"><label>Date de fin</label><DateInput value={fin} onChange={setFin} defaultMonth={debut} /></div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}><label>Lieu</label><input value={lieu} onChange={e => setLieu(e.target.value)} /></div>
-        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-          <label>Statut</label>
-          <select value={statut} onChange={e => setStatut(e.target.value as EvenementStatut)}>
-            <option value="parametrage">Paramétrage</option>
-            <option value="actif">Actif</option>
-            <option value="termine">Terminé</option>
-          </select>
-        </div>
-      </div>
-    </Modal>
-  )
-}
+import { useSidebarNav } from '../contexts/SidebarNavContext'
 
 function TabDetails({ ev }: { ev: Evenement }) {
   return (
@@ -70,12 +33,31 @@ function TabDetails({ ev }: { ev: Evenement }) {
 
 type Tab = 'dashboard' | 'details' | 'stands' | 'prestations' | 'prestataires' | 'utilisateurs' | 'main_courante' | 'corbeille'
 
+const TAB_ITEMS = [
+  { key: 'dashboard', label: 'Tableau de bord' },
+  { key: 'details', label: 'Détails' },
+  { key: 'stands', label: 'Stands' },
+  { key: 'prestations', label: 'Prestations' },
+  { key: 'prestataires', label: 'Prestataires' },
+  { key: 'utilisateurs', label: 'Utilisateurs' },
+  { key: 'main_courante', label: 'Main courante' },
+  { key: 'corbeille', label: 'Corbeille' },
+] as const
+
 export function FicheEvenementPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [ev, setEv] = useState<Evenement | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
   const [editing, setEditing] = useState(false)
+  const { setNavItems, setActiveNav, activeNav } = useSidebarNav()
+
+  const tab = (activeNav as Tab) || 'dashboard'
+
+  useEffect(() => {
+    setNavItems([...TAB_ITEMS])
+    setActiveNav('dashboard')
+    return () => { setNavItems([]); setActiveNav('') }
+  }, [])
 
   async function load() {
     if (!id) { navigate('/evenements'); return }
@@ -109,18 +91,10 @@ export function FicheEvenementPage() {
         </div>
       </div>
 
-      <div className="tabs">
-        {(['dashboard', 'details', 'stands', 'prestations', 'prestataires', 'utilisateurs', 'main_courante', 'corbeille'] as Tab[]).map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {{ dashboard: 'Tableau de bord', details: 'Détails', stands: 'Stands', prestations: 'Prestations', prestataires: 'Prestataires', utilisateurs: 'Utilisateurs', main_courante: 'Main courante', corbeille: 'Corbeille' }[t]}
-          </button>
-        ))}
-      </div>
-
       {tab === 'dashboard' && <TabDashboard ev={ev} />}
       {tab === 'details' && <TabDetails ev={ev} />}
       {tab === 'stands' && <TabStands ev={ev} />}
-      {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setTab('stands')} />}
+      {tab === 'prestations' && <TabPrestations ev={ev} onGoToStands={() => setActiveNav('stands')} />}
       {tab === 'prestataires' && <TabPrestataires ev={ev} />}
       {tab === 'utilisateurs' && <TabUtilisateurs ev={ev} />}
       {tab === 'main_courante' && <TabMainCourante ev={ev} canDelete />}

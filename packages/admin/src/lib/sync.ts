@@ -1,6 +1,6 @@
-import { sb, sbAdmin } from './supabase'
+import { sb } from './supabase'
 import { db } from './db'
-import { compressImage } from './compressImage'
+import { uploadPhoto } from './storage'
 
 export async function downloadEvent(eventId: string, role_local?: string): Promise<void> {
   const [{ data: ev, error: evErr }, { data: stands, error: standsErr }, { data: epRows }] = await Promise.all([
@@ -11,7 +11,6 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
   if (evErr || !ev) throw new Error(evErr?.message ?? 'Événement introuvable')
   if (standsErr || !stands) throw new Error(standsErr?.message ?? 'Stands introuvables')
 
-  // Met en cache les prestataires de l'événement pour les formulaires hors ligne
   const prestataires = (epRows ?? []).map(r => r.prestataires as unknown as { id: string; raison_sociale: string; email_contact: string | null; telephone: string | null }).filter(Boolean)
   if (prestataires.length) {
     db.prestataires.bulkPut(prestataires).catch(() => {})
@@ -57,53 +56,30 @@ export async function downloadEvent(eventId: string, role_local?: string): Promi
 export async function syncPending(): Promise<number> {
   let count = 0
 
-  // Sync des stands créés ou modifiés hors ligne
   const pendingStands = await db.stands.where('pending_sync').equals(1).toArray()
   await Promise.allSettled(pendingStands.map(async s => {
     const { error } = await sb.from('stands').upsert({
-      id: s.id,
-      evenement_id: s.evenement_id,
-      nom_exposant: s.nom_exposant,
-      hall: s.hall,
-      numero: s.numero,
-      surface: s.surface,
-      angles: s.angles,
+      id: s.id, evenement_id: s.evenement_id, nom_exposant: s.nom_exposant,
+      hall: s.hall, numero: s.numero, surface: s.surface, angles: s.angles,
     }, { onConflict: 'id' })
-    if (!error) {
-      await db.stands.update(s.id, { pending_sync: 0 })
-      count++
-    }
+    if (!error) { await db.stands.update(s.id, { pending_sync: 0 }); count++ }
   }))
 
-  // Sync des prestations créées ou modifiées hors ligne
   const pending = await db.prestations.where('pending_sync').equals(1).toArray()
   await Promise.allSettled(pending.map(async p => {
     const { error } = await sb.from('prestations').upsert({
-      id: p.id,
-      stand_id: p.stand_id,
-      prestataire_id: p.prestataire_id,
-      libelle: p.libelle,
-      categorie: p.categorie,
-      quantite_attendue: p.quantite_attendue,
-      emplacement_prevu: p.emplacement_prevu,
-      ajout_sur_site: p.ajout_sur_site,
-      commentaire_prestataire: p.commentaire_prestataire,
-      statut_conformite: p.statut_conformite,
-      quantite_constatee: p.quantite_constatee,
-      commentaire: p.commentaire,
-      controleur_id: p.controleur_id,
-      date_controle: p.date_controle,
-      anomalie: p.anomalie ?? false,
-      date_anomalie: p.date_anomalie ?? null,
+      id: p.id, stand_id: p.stand_id, prestataire_id: p.prestataire_id,
+      libelle: p.libelle, categorie: p.categorie, quantite_attendue: p.quantite_attendue,
+      emplacement_prevu: p.emplacement_prevu, ajout_sur_site: p.ajout_sur_site,
+      commentaire_prestataire: p.commentaire_prestataire, statut_conformite: p.statut_conformite,
+      quantite_constatee: p.quantite_constatee, commentaire: p.commentaire,
+      controleur_id: p.controleur_id, date_controle: p.date_controle,
+      anomalie: p.anomalie ?? false, date_anomalie: p.date_anomalie ?? null,
       date_retour_a_verifier: p.date_retour_a_verifier ?? null,
     }, { onConflict: 'id' })
-    if (!error) {
-      await db.prestations.update(p.id, { pending_sync: 0 })
-      count++
-    }
+    if (!error) { await db.prestations.update(p.id, { pending_sync: 0 }); count++ }
   }))
 
-  // Envoi des notifications différées (non-conformité/absent saisies hors ligne)
   const pendingNotifs = await db.pending_notifications.toArray()
   if (pendingNotifs.length) {
     const { data: { session } } = await sb.auth.getSession()
@@ -129,80 +105,36 @@ export async function syncPending(): Promise<number> {
     }
   }
 
-  // Sync des entrées main courante créées/modifiées hors ligne
   const pendingMcs = await db.main_courante.where('pending_sync').equals(1).toArray()
   await Promise.allSettled(pendingMcs.map(async mc => {
     const { error } = await sb.from('main_courante').upsert({
-      id: mc.id,
-      evenement_id: mc.evenement_id,
-      stand_id: mc.stand_id,
-      titre: mc.titre,
-      descriptif: mc.descriptif,
-      etat: mc.etat,
-      created_at: mc.created_at,
-      created_by: mc.created_by,
+      id: mc.id, evenement_id: mc.evenement_id, stand_id: mc.stand_id,
+      titre: mc.titre, descriptif: mc.descriptif, etat: mc.etat,
+      created_at: mc.created_at, created_by: mc.created_by,
     }, { onConflict: 'id' })
-    if (!error) {
-      await db.main_courante.update(mc.id, { pending_sync: 0 })
-      count++
-    }
+    if (!error) { await db.main_courante.update(mc.id, { pending_sync: 0 }); count++ }
   }))
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-  const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE as string
-
-  // Sync des photos prises hors ligne (prestations)
   const pendingPhotos = await db.photos.where('synced').equals(0).toArray()
   for (const photo of pendingPhotos) {
     try {
-      const file = new File([photo.blob], 'photo.jpg', { type: 'image/jpeg' })
-      const compressed = await compressImage(file)
       const path = `${photo.prestation_id}/${crypto.randomUUID()}.jpg`
-      const res = await fetch(`${supabaseUrl}/storage/v1/object/Photos/${path}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${serviceKey}`,
-          'Content-Type': 'image/jpeg',
-          'x-upsert': 'false',
-        },
-        body: compressed,
-      })
-      if (res.ok) {
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/Photos/${path}`
-        await sbAdmin.from('photos').insert({ prestation_id: photo.prestation_id, url: publicUrl, synced: true })
-        await db.photos.update(photo.id!, { synced: 1, remote_url: publicUrl })
-        count++
-      }
-    } catch {
-      // Sera réessayé à la prochaine sync
-    }
+      const publicUrl = await uploadPhoto(photo.blob, path)
+      await sb.from('photos').insert({ prestation_id: photo.prestation_id, url: publicUrl, synced: true })
+      await db.photos.update(photo.id!, { synced: 1, remote_url: publicUrl })
+      count++
+    } catch { /* sera réessayé à la prochaine sync */ }
   }
 
-  // Sync des photos main courante prises hors ligne
   const pendingMcPhotos = await db.mc_photos.where('synced').equals(0).toArray()
   for (const photo of pendingMcPhotos) {
     try {
-      const file = new File([photo.blob], 'photo.jpg', { type: 'image/jpeg' })
-      const compressed = await compressImage(file)
       const path = `main-courante/${photo.main_courante_id}/${crypto.randomUUID()}.jpg`
-      const res = await fetch(`${supabaseUrl}/storage/v1/object/Photos/${path}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${serviceKey}`,
-          'Content-Type': 'image/jpeg',
-          'x-upsert': 'false',
-        },
-        body: compressed,
-      })
-      if (res.ok) {
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/Photos/${path}`
-        await sbAdmin.from('main_courante_photos').insert({ main_courante_id: photo.main_courante_id, url: publicUrl })
-        await db.mc_photos.update(photo.id!, { synced: 1, remote_url: publicUrl })
-        count++
-      }
-    } catch {
-      // Sera réessayé à la prochaine sync
-    }
+      const publicUrl = await uploadPhoto(photo.blob, path)
+      await sb.from('main_courante_photos').insert({ main_courante_id: photo.main_courante_id, url: publicUrl })
+      await db.mc_photos.update(photo.id!, { synced: 1, remote_url: publicUrl })
+      count++
+    } catch { /* sera réessayé à la prochaine sync */ }
   }
 
   return count
