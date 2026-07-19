@@ -7,10 +7,12 @@ interface Props {
   onClose: () => void
   notifPermission: NotificationPermission
   notifSupported: boolean
+  notifSubscribed: boolean
+  notifChecking: boolean
   onRequestNotif: () => Promise<void>
 }
 
-export function SettingsModal({ theme, onThemeChange, onClose, notifPermission, notifSupported, onRequestNotif }: Props) {
+export function SettingsModal({ theme, onThemeChange, onClose, notifPermission, notifSupported, notifSubscribed, notifChecking, onRequestNotif }: Props) {
   const [subscribing, setSubscribing] = useState(false)
 
   async function enableNotifications() {
@@ -19,8 +21,18 @@ export function SettingsModal({ theme, onThemeChange, onClose, notifPermission, 
     setSubscribing(false)
   }
 
-  const notifLabel = !notifSupported ? '⚠️ Non supportées sur cet appareil' : notifPermission === 'granted' ? '✅ Activées' : notifPermission === 'denied' ? '🚫 Bloquées par le navigateur' : '⏳ Non activées'
-  const canRequest = notifSupported && notifPermission === 'default'
+  function getNotifLabel() {
+    if (!notifSupported) return '⚠️ Non supportées sur cet appareil'
+    if (notifChecking) return '⏳ Vérification…'
+    if (notifPermission === 'denied') return '🚫 Bloquées par le navigateur'
+    if (notifPermission === 'granted' && notifSubscribed) return '✅ Activées'
+    if (notifPermission === 'granted' && !notifSubscribed) return '⚠️ Appareil non enregistré'
+    return '⏳ Non activées'
+  }
+
+  const notifLabel = getNotifLabel()
+  // Allow re-subscribing when permission is granted but DB row is missing
+  const canRequest = notifSupported && !notifChecking && (notifPermission === 'default' || (notifPermission === 'granted' && !notifSubscribed))
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -56,7 +68,7 @@ export function SettingsModal({ theme, onThemeChange, onClose, notifPermission, 
             </div>
             {canRequest && (
               <button className="btn btn-primary" style={{ width: '100%' }} onClick={enableNotifications} disabled={subscribing}>
-                {subscribing ? 'Activation…' : 'Activer les notifications'}
+                {subscribing ? 'Activation…' : notifPermission === 'granted' ? 'Ré-enregistrer cet appareil' : 'Activer les notifications'}
               </button>
             )}
             {notifPermission === 'denied' && (

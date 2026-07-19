@@ -16,7 +16,7 @@ export function AppHeader({ onHamburger }: Props) {
   const { user } = useAuth()
   const { unread, messages, markAllRead } = useMessages(user?.id ?? null)
   const { theme, setTheme } = useTheme()
-  const { permission, requestPermission, supported } = usePushNotifications(user?.id ?? null)
+  const { permission, requestPermission, supported, subscribed, checking } = usePushNotifications(user?.id ?? null)
   const userName = `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim()
 
   return (
@@ -36,7 +36,7 @@ export function AppHeader({ onHamburger }: Props) {
           />
         </div>
       </header>
-      {settingsOpen && <SettingsModal theme={theme} onThemeChange={setTheme} notifPermission={permission} notifSupported={supported} onRequestNotif={requestPermission} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal theme={theme} onThemeChange={setTheme} notifPermission={permission} notifSupported={supported} notifSubscribed={subscribed} notifChecking={checking} onRequestNotif={requestPermission} onClose={() => setSettingsOpen(false)} />}
     </>
   )
 }
